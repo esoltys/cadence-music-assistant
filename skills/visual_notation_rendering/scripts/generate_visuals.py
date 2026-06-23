@@ -47,6 +47,7 @@ def pitch_to_midi(pitch_str):
 def main():
     parser = argparse.ArgumentParser(description="Render score canvas state to visual plots and MusicXML.")
     parser.add_argument("--canvas-path", help="Path to the canvas state JSON file")
+    parser.add_argument("--session-id", required=True, help="Unique ADK runtime session ID")
     args = parser.parse_args()
 
     # Determine paths
@@ -56,7 +57,7 @@ def main():
     if args.canvas_path:
         canvas_path = Path(args.canvas_path)
     else:
-        canvas_path = project_root / "skills" / "score_construction" / "assets" / "canvas_state.json"
+        canvas_path = project_root / "skills" / "score_construction" / "assets" / f"canvas_{args.session_id}.json"
         
     assets_dir = script_dir.parent / "assets"
     
@@ -119,8 +120,10 @@ def main():
         plt.xlim(-0.2, current_time + 0.2)
         plt.tight_layout()
         
-        piano_roll_path = assets_dir / "piano_roll.png"
+        piano_roll_path = assets_dir / f"piano_roll_{args.session_id}.png"
+        score_plot_path = assets_dir / f"score_plot_{args.session_id}.png"
         plt.savefig(piano_roll_path, dpi=150)
+        plt.savefig(score_plot_path, dpi=150)
         plt.close()
         
         # 2. music21 MusicXML Export
@@ -150,7 +153,7 @@ def main():
         m21_score.append(m21_part)
         
         # Export score to MusicXML
-        musicxml_path = assets_dir / "score.musicxml"
+        musicxml_path = assets_dir / f"score_{args.session_id}.musicxml"
         m21_score.write("musicxml", fp=str(musicxml_path))
         
         # Make relative paths from project root for portability

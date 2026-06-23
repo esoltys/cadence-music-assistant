@@ -11,18 +11,20 @@ def main():
     # init sub-command
     init_parser = subparsers.add_parser("init", help="Initialize a blank canvas.")
     init_parser.add_argument("--time-signature", default="4/4", help="Time signature of the canvas (default '4/4')")
+    init_parser.add_argument("--session-id", required=True, help="Unique ADK runtime session ID")
 
     # add sub-command
     add_parser = subparsers.add_parser("add", help="Add a note/rest token to the canvas.")
     add_parser.add_argument("--pitch", required=True, help="Pitch name (e.g. 'C4') or 'rest'")
     add_parser.add_argument("--duration", required=True, help="Duration (e.g. 'quarter', 'half', 'eighth')")
+    add_parser.add_argument("--session-id", required=True, help="Unique ADK runtime session ID")
 
     args = parser.parse_args()
 
     # Determine paths
     script_dir = Path(__file__).parent.resolve()
     assets_dir = script_dir.parent / "assets"
-    state_file = assets_dir / "canvas_state.json"
+    state_file = assets_dir / f"canvas_{args.session_id}.json"
 
     try:
         if args.command == "init":

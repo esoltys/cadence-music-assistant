@@ -48,6 +48,7 @@ def midi_to_freq(midi_num):
 def main():
     parser = argparse.ArgumentParser(description="Synthesize canvas state to WAV audio.")
     parser.add_argument("--canvas-path", help="Path to the canvas state JSON file")
+    parser.add_argument("--session-id", type=str, required=True, help="Unique ADK runtime session ID")
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent.resolve()
@@ -56,10 +57,10 @@ def main():
     if args.canvas_path:
         canvas_path = Path(args.canvas_path)
     else:
-        canvas_path = project_root / "skills" / "score_construction" / "assets" / "canvas_state.json"
+        canvas_path = project_root / "skills" / "score_construction" / "assets" / f"canvas_{args.session_id}.json"
         
     assets_dir = script_dir.parent / "assets"
-    output_file = assets_dir / "score.wav"
+    output_file = assets_dir / f"score_{args.session_id}.wav"
     
     try:
         if not canvas_path.is_file():
