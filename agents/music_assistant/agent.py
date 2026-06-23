@@ -136,6 +136,28 @@ def render_notation() -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute rendering script: {e}"})
 
+def synthesize_score() -> str:
+    """Synthesizes the current score canvas state to a piano WAV audio file.
+
+    Returns:
+        A JSON string containing the status, audio_path to the synthesized WAV file, or error details.
+    """
+    project_root = Path(__file__).parent.parent.parent.resolve()
+    script_path = project_root / "skills" / "acoustic_audio_synthesis" / "scripts" / "synthesize_canvas.py"
+    
+    python_exe = sys.executable or "python"
+    try:
+        result = subprocess.run(
+            [python_exe, str(script_path)],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        return (result.stdout or result.stderr or 
+                json.dumps({"status": "error", "error": "No output from synthesis script."}))
+    except Exception as e:
+        return json.dumps({"status": "error", "error": f"Failed to execute synthesis script: {e}"})
+
 root_agent = Agent(
     name="music_assistant_root",
     model=Gemini(
@@ -150,9 +172,11 @@ root_agent = Agent(
         "Use the render_notation tool to visualize the current score canvas state as piano roll and timeline notation graphs. "
         "When rendering visual notation, you MUST return the paths of the generated image assets (piano_roll, score_plot) formatted as inline Markdown image links, for example: "
         "![Piano Roll](skills/visual_notation_rendering/assets/piano_roll.png) and ![Score Plot](skills/visual_notation_rendering/assets/score_plot.png). "
-        "Additionally, you MUST explicitly notify the user that the high-fidelity MusicXML asset is ready for MuseScore inspection, including its file path (e.g., `skills/visual_notation_rendering/assets/score.musicxml`)."
+        "Additionally, you MUST explicitly notify the user that the high-fidelity MusicXML asset is ready for MuseScore inspection, including its file path (e.g., `skills/visual_notation_rendering/assets/score.musicxml`).\n"
+        "Use the synthesize_score tool to compile the notes from the canvas state into a piano WAV audio file. "
+        "When synthesizing audio, you MUST return the path of the generated audio asset (e.g., `skills/acoustic_audio_synthesis/assets/score.wav`) in your final response."
     ),
-    tools=[evaluate_interval, initialize_canvas, add_note_to_canvas, analyze_midi_file, render_notation],
+    tools=[evaluate_interval, initialize_canvas, add_note_to_canvas, analyze_midi_file, render_notation, synthesize_score],
 )
 
 app = App(
