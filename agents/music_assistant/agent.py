@@ -112,6 +112,30 @@ def analyze_midi_file(file_path: str) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute midi parser script: {e}"})
 
+def render_notation() -> str:
+    """Renders the current score canvas state to visual piano roll and notation timeline graphs.
+
+    You MUST format the returned image paths as inline Markdown image links, e.g. ![Piano Roll](path) or ![Score Plot](path), in your final response.
+
+    Returns:
+        A JSON string containing the status, piano_roll image path, notation_layout image path, score_plot image path, or error details.
+    """
+    project_root = Path(__file__).parent.parent.parent.resolve()
+    script_path = project_root / "skills" / "visual_notation_rendering" / "scripts" / "generate_visuals.py"
+    
+    python_exe = sys.executable or "python"
+    try:
+        result = subprocess.run(
+            [python_exe, str(script_path)],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        return (result.stdout or result.stderr or 
+                json.dumps({"status": "error", "error": "No output from rendering script."}))
+    except Exception as e:
+        return json.dumps({"status": "error", "error": f"Failed to execute rendering script: {e}"})
+
 root_agent = Agent(
     name="music_assistant_root",
     model=Gemini(
@@ -122,9 +146,12 @@ root_agent = Agent(
         "You are a symbolic music assistant designed to help with music theory, chords, scores, and MIDI files. "
         "Use the evaluate_interval tool to compute pitch distance and interval names. "
         "Use the initialize_canvas and add_note_to_canvas tools to manage and construct symbolic scores on the canvas. "
-        "Use the analyze_midi_file tool to ingest raw MIDI files and extract track count, tempo, and note count."
+        "Use the analyze_midi_file tool to ingest raw MIDI files and extract track count, tempo, and note count. "
+        "Use the render_notation tool to visualize the current score canvas state as piano roll and timeline notation graphs. "
+        "When rendering visual notation, you MUST return the paths of the generated image assets (piano_roll, notation_layout, score_plot) formatted as inline Markdown image links, for example: "
+        "![Piano Roll](skills/visual_notation_rendering/assets/piano_roll.png) and ![Score Plot](skills/visual_notation_rendering/assets/score_plot.png)."
     ),
-    tools=[evaluate_interval, initialize_canvas, add_note_to_canvas, analyze_midi_file],
+    tools=[evaluate_interval, initialize_canvas, add_note_to_canvas, analyze_midi_file, render_notation],
 )
 
 app = App(

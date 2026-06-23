@@ -4,6 +4,42 @@
     {
       "pitch": "C4",
       "duration": "quarter"
+    },
+    {
+      "pitch": "E4",
+      "duration": "quarter"
+    },
+    {
+      "pitch": "G4",
+      "duration": "quarter"
+    },
+    {
+      "pitch": "C5",
+      "duration": "quarter"
+    },
+    {
+      "pitch": "D5",
+      "duration": "eighth"
+    },
+    {
+      "pitch": "C5",
+      "duration": "eighth"
+    },
+    {
+      "pitch": "B4",
+      "duration": "quarter"
+    },
+    {
+      "pitch": "A4",
+      "duration": "half"
+    },
+    {
+      "pitch": "G4",
+      "duration": "half"
+    },
+    {
+      "pitch": "C4",
+      "duration": "whole"
     }
   ]
 }
