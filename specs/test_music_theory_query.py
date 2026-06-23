@@ -192,11 +192,14 @@ async def run_evaluation():
                 reasons.append(f"Expected interval name '{sc['expected_interval_name']}' not in response")
         else:
             # Verify expected error message (flexible matching for LLM rephrasing)
-            expected_keywords = ["out of", "midi/pitch range"]
+            expected_keywords = ["midi/pitch range"]
             for kw in expected_keywords:
                 if kw not in response_text.lower():
                     response_passed = False
                     reasons.append(f"Expected keyword '{kw}' not in response")
+            if "out of" not in response_text.lower() and "outside" not in response_text.lower() and "beyond" not in response_text.lower():
+                response_passed = False
+                reasons.append("Expected 'out of', 'outside', or 'beyond' keyword not in response")
                 
         response_score = 1.0 if response_passed else 0.0
         

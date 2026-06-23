@@ -5,7 +5,7 @@ Feature: Acoustic Audio Synthesis Pipeline
   So that I can listen to my compositions
 
   Scenario: Generate a piano WAV audio export from active canvas state
-    Given an active score canvas state at "skills/score_construction/assets/canvas_state.json"
+    Given an active score canvas state at "skills/score_construction/assets/canvas_{session_id}.json"
     When the user requests to synthesize the canvas to a piano WAV file
     Then the agent should call the audio synthesis tool
-    And the response should confirm the output audio target path "skills/acoustic_audio_synthesis/assets/score.wav"
+    And the response should confirm the output audio target path "skills/acoustic_audio_synthesis/assets/score_{session_id}.wav"

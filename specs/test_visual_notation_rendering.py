@@ -91,8 +91,11 @@ async def run_evaluation():
         print(f"Running Scenario {idx+1}: {sc['name']}")
         print(f"==================================================")
         
+        session_id = f"eval-session-{idx}"
+        
         # Ensure canvas state file exists and has data (e.g. a rich multi-note melody)
-        canvas_file = PROJECT_ROOT / sc["canvas_path"]
+        canvas_path_str = sc["canvas_path"].replace("{session_id}", session_id)
+        canvas_file = PROJECT_ROOT / canvas_path_str
         print(f"Pre-loading canvas state file: {canvas_file}")
         canvas_file.parent.mkdir(parents=True, exist_ok=True)
         
@@ -135,7 +138,7 @@ async def run_evaluation():
         )
         
         # Run agent
-        session_id = f"eval-session-{idx}"
+        user_id = "eval-user"
         new_message = types.Content(
             role="user",
             parts=[types.Part(text=query)]
@@ -185,7 +188,7 @@ async def run_evaluation():
         
         # Expect the output image target path (e.g. skills/visual_notation_rendering/assets/score_plot.png) in response
         # Normalize paths for comparison (forward slashes)
-        expected_path = sc["expected_image_path"].replace("\\", "/")
+        expected_path = sc["expected_image_path"].replace("{session_id}", session_id).replace("\\", "/")
         normalized_response = response_text.replace("\\", "/")
         
         if expected_path not in normalized_response:
@@ -199,7 +202,7 @@ async def run_evaluation():
             reasons.append(f"Expected output image path '{expected_path}' to be formatted as an inline Markdown image link (e.g. ![Score Plot]({expected_path}))")
             
         # Verify MusicXML path is mentioned in response
-        expected_xml = "skills/visual_notation_rendering/assets/score.musicxml"
+        expected_xml = f"skills/visual_notation_rendering/assets/score_{session_id}.musicxml"
         if expected_xml not in normalized_response:
             response_passed = False
             reasons.append(f"Expected MusicXML path '{expected_xml}' not in response")

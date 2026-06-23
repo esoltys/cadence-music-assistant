@@ -91,8 +91,9 @@ async def run_evaluation():
         print(f"Running Scenario {idx+1}: {sc['name']}")
         print(f"==================================================")
         
-        # Ensure canvas state file exists and has data (e.g. C4 quarter note)
-        canvas_file = PROJECT_ROOT / sc["canvas_path"]
+        session_id = f"eval-session-{idx}"
+        canvas_path_str = sc["canvas_path"].replace("{session_id}", session_id)
+        canvas_file = PROJECT_ROOT / canvas_path_str
         print(f"Pre-loading canvas state file: {canvas_file}")
         canvas_file.parent.mkdir(parents=True, exist_ok=True)
         
@@ -134,7 +135,7 @@ async def run_evaluation():
         )
         
         # Run agent
-        session_id = f"eval-session-{idx}"
+        user_id = "eval-user"
         new_message = types.Content(
             role="user",
             parts=[types.Part(text=query)]
@@ -182,7 +183,7 @@ async def run_evaluation():
         response_passed = True
         reasons = []
         
-        expected_path = sc["expected_audio_path"].replace("\\", "/")
+        expected_path = sc["expected_audio_path"].replace("{session_id}", session_id).replace("\\", "/")
         normalized_response = response_text.replace("\\", "/")
         
         if expected_path not in normalized_response:

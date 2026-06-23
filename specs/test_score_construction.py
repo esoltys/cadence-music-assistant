@@ -67,8 +67,7 @@ async def run_evaluation():
     print(f"Reading Gherkin scenarios from: {feature_file}\n")
     scenarios = parse_gherkin_scenarios(str(feature_file))
     
-    # Locate state file
-    state_file = PROJECT_ROOT / "skills" / "score_construction" / "assets" / "canvas_state.json"
+    # state_file will be resolved dynamically per session within the scenario loop
     
     # Setup TrajectoryEvaluator with IN_ORDER
     criterion = ToolTrajectoryCriterion(
@@ -87,7 +86,10 @@ async def run_evaluation():
         print(f"==================================================")
         print(f"Running Scenario {idx+1}: {sc['name']}")
         print(f"==================================================")
-        
+        session_id = f"score-eval-session-{idx}"
+        user_id = "eval-user"
+        state_file = PROJECT_ROOT / "skills" / "score_construction" / "assets" / f"canvas_{session_id}.json"
+
         # Given a clean canvas state: delete/clear the state file
         if state_file.is_file():
             state_file.unlink()
@@ -100,9 +102,6 @@ async def run_evaluation():
             artifact_service=InMemoryArtifactService(),
             auto_create_session=True
         )
-        
-        session_id = f"score-eval-session-{idx}"
-        user_id = "eval-user"
         
         # Turn 1: Initialize canvas
         query1 = f"Initialize a blank canvas with time signature {sc['time_signature']}"
