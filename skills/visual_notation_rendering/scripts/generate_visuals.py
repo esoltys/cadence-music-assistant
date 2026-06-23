@@ -145,8 +145,42 @@ def main():
         
         notation_layout_path = assets_dir / "notation_layout.png"
         plt.savefig(notation_layout_path, dpi=150)
+        plt.close()
         
-        # Save a duplicate as score_plot.png to satisfy specs/visual_notation_rendering.feature
+        # 3. Combined Score Plot Export (Vertical Subplot Stack of both views)
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+        
+        # Subplot 1: Piano Roll View
+        ax1.set_title("Score Canvas Piano Roll View", fontsize=12, fontweight='bold')
+        ax1.grid(True, which='both', linestyle='--', alpha=0.5)
+        for start, end, midi, pitch in note_data:
+            ax1.plot([start, end], [midi, midi], color='#2b5c8f', linewidth=8, solid_capstyle='butt')
+        ax1.set_ylabel("Pitch", fontsize=10)
+        ax1.set_yticks(sorted_midi)
+        ax1.set_yticklabels(sorted_labels)
+        if len(sorted_midi) == 1:
+            ax1.set_ylim(sorted_midi[0] - 1, sorted_midi[0] + 1)
+        else:
+            ax1.set_ylim(sorted_midi[0] - 0.5, sorted_midi[-1] + 0.5)
+            
+        # Subplot 2: Timeline Notation Layout View
+        ax2.set_title("Score Canvas Timeline Notation Layout", fontsize=12, fontweight='bold')
+        ax2.grid(True, which='both', linestyle='-', color='#e0e0e0', linewidth=1)
+        for start, end, midi, pitch in note_data:
+            ax2.scatter(start, midi, color='#a83232', s=120, zorder=3, edgecolors='black')
+            ax2.plot([start, end], [midi, midi], color='#7f8c8d', linestyle='--', linewidth=1.5, zorder=2)
+        ax2.set_ylabel("Pitch Grid", fontsize=10)
+        ax2.set_xlabel("Time (Beats)", fontsize=10)
+        ax2.set_yticks(sorted_midi)
+        ax2.set_yticklabels(sorted_labels)
+        if len(sorted_midi) == 1:
+            ax2.set_ylim(sorted_midi[0] - 1, sorted_midi[0] + 1)
+        else:
+            ax2.set_ylim(sorted_midi[0] - 0.5, sorted_midi[-1] + 0.5)
+            
+        plt.xlim(-0.2, current_time + 0.2)
+        plt.tight_layout()
+        
         score_plot_path = assets_dir / "score_plot.png"
         plt.savefig(score_plot_path, dpi=150)
         plt.close()
