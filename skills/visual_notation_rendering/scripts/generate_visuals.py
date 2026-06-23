@@ -121,10 +121,6 @@ def main():
         
         piano_roll_path = assets_dir / "piano_roll.png"
         plt.savefig(piano_roll_path, dpi=150)
-        
-        # Also save a duplicate as score_plot.png to satisfy the Gherkin feature file
-        score_plot_path = assets_dir / "score_plot.png"
-        plt.savefig(score_plot_path, dpi=150)
         plt.close()
         
         # 2. music21 MusicXML Export
@@ -159,13 +155,11 @@ def main():
         
         # Make relative paths from project root for portability
         rel_piano_roll = piano_roll_path.relative_to(project_root).as_posix()
-        rel_score_plot = score_plot_path.relative_to(project_root).as_posix()
         rel_score_xml = musicxml_path.relative_to(project_root).as_posix()
         
         print(json.dumps({
             "status": "success",
             "piano_roll": rel_piano_roll,
-            "score_plot": rel_score_plot,
             "score_xml": rel_score_xml
         }, indent=2))
         sys.exit(0)

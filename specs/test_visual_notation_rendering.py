@@ -50,8 +50,8 @@ def parse_gherkin_scenarios(feature_file_path: str):
                 if match_path:
                     current_scenario["canvas_path"] = match_path.group(1)
                 
-                # And the response should confirm the output image target path "skills/visual_notation_rendering/assets/score_plot.png"
-                match_image = re.search(r'output image target path "([^"]+)"', line)
+                # And the response should contain the piano roll image path "skills/visual_notation_rendering/assets/piano_roll.png"
+                match_image = re.search(r'piano roll image path "([^"]+)"', line)
                 if match_image:
                     current_scenario["expected_image_path"] = match_image.group(1)
                     
