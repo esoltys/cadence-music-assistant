@@ -197,6 +197,17 @@ async def run_evaluation():
         if not re.search(markdown_image_pattern, normalized_response):
             response_passed = False
             reasons.append(f"Expected output image path '{expected_path}' to be formatted as an inline Markdown image link (e.g. ![Score Plot]({expected_path}))")
+            
+        # Verify MusicXML path is mentioned in response
+        expected_xml = "skills/visual_notation_rendering/assets/score.musicxml"
+        if expected_xml not in normalized_response:
+            response_passed = False
+            reasons.append(f"Expected MusicXML path '{expected_xml}' not in response")
+            
+        # Verify MuseScore/inspection is mentioned
+        if "musescore" not in normalized_response.lower() and "inspection" not in normalized_response.lower():
+            response_passed = False
+            reasons.append("Expected MuseScore or inspection notification in response")
                 
         response_score = 1.0 if response_passed else 0.0
         

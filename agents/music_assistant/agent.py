@@ -148,8 +148,9 @@ root_agent = Agent(
         "Use the initialize_canvas and add_note_to_canvas tools to manage and construct symbolic scores on the canvas. "
         "Use the analyze_midi_file tool to ingest raw MIDI files and extract track count, tempo, and note count. "
         "Use the render_notation tool to visualize the current score canvas state as piano roll and timeline notation graphs. "
-        "When rendering visual notation, you MUST return the paths of the generated image assets (piano_roll, notation_layout, score_plot) formatted as inline Markdown image links, for example: "
-        "![Piano Roll](skills/visual_notation_rendering/assets/piano_roll.png) and ![Score Plot](skills/visual_notation_rendering/assets/score_plot.png)."
+        "When rendering visual notation, you MUST return the paths of the generated image assets (piano_roll, score_plot) formatted as inline Markdown image links, for example: "
+        "![Piano Roll](skills/visual_notation_rendering/assets/piano_roll.png) and ![Score Plot](skills/visual_notation_rendering/assets/score_plot.png). "
+        "Additionally, you MUST explicitly notify the user that the high-fidelity MusicXML asset is ready for MuseScore inspection, including its file path (e.g., `skills/visual_notation_rendering/assets/score.musicxml`)."
     ),
     tools=[evaluate_interval, initialize_canvas, add_note_to_canvas, analyze_midi_file, render_notation],
 )
