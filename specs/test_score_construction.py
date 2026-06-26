@@ -210,7 +210,17 @@ async def run_evaluation():
                 with open(state_file, "r", encoding="utf-8") as f:
                     state = json.load(f)
                 if state.get("time_signature") == sc["time_signature"]:
-                    notes = state.get("notes", [])
+                    parts = state.get("parts", [])
+                    notes = []
+                    if parts:
+                        for measure in parts[0].get("measures", []):
+                            for event in measure.get("events", []):
+                                pitches = event.get("pitches", [])
+                                pitch_str = ",".join(pitches) if pitches else "rest"
+                                notes.append({
+                                    "pitch": pitch_str,
+                                    "duration": event.get("duration")
+                                })
                     if len(notes) == 1:
                         note = notes[0]
                         if note.get("pitch") == sc["pitch"] and note.get("duration") == sc["duration"]:

@@ -99,22 +99,45 @@ async def run_evaluation():
         
         test_state = {
             "time_signature": "4/4",
-            "notes": [
-                {"pitch": "C4", "duration": "quarter"},
-                {"pitch": "E4", "duration": "quarter"},
-                {"pitch": "G4", "duration": "quarter"},
-                {"pitch": "C5", "duration": "quarter"},
-                {"pitch": "D5", "duration": "eighth"},
-                {"pitch": "C5", "duration": "eighth"},
-                {"pitch": "B4", "duration": "quarter"},
-                {"pitch": "A4", "duration": "half"},
-                {"pitch": "G4", "duration": "half"},
-                {"pitch": "C4", "duration": "whole"}
+            "key_signature": "C Major",
+            "parts": [
+                {
+                    "id": "melody",
+                    "name": "Melody",
+                    "clef": "treble",
+                    "measures": [
+                        {
+                            "number": 1,
+                            "events": [
+                                {"pitches": ["C4"], "duration": "quarter"},
+                                {"pitches": ["E4"], "duration": "quarter"},
+                                {"pitches": ["G4"], "duration": "quarter"},
+                                {"pitches": ["C5"], "duration": "quarter"}
+                            ]
+                        },
+                        {
+                            "number": 2,
+                            "events": [
+                                {"pitches": ["D5"], "duration": "eighth"},
+                                {"pitches": ["C5"], "duration": "eighth"},
+                                {"pitches": ["B4"], "duration": "quarter"},
+                                {"pitches": ["A4"], "duration": "half"}
+                            ]
+                        },
+                        {
+                            "number": 3,
+                            "events": [
+                                {"pitches": ["G4"], "duration": "half"},
+                                {"pitches": ["C4"], "duration": "whole"}
+                            ]
+                        }
+                    ]
+                }
             ]
         }
         with open(canvas_file, "w", encoding="utf-8") as f:
             json.dump(test_state, f, indent=2)
-        print(f"Canvas file pre-loaded with a rich melody of {len(test_state['notes'])} notes.")
+        print("Canvas file pre-loaded with a rich melody.")
 
         query = "Convert the active canvas notes into a piano WAV file."
         print(f"Query: '{query}'")
