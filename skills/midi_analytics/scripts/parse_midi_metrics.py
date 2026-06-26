@@ -45,12 +45,26 @@ def main():
         tempo_times, tempo_bpms = pm.get_tempo_changes()
         global_tempo = float(tempo_bpms[0]) if len(tempo_bpms) > 0 else 120.0
         
+        # Extract detailed track / instrument info
+        instruments_info = []
+        for i, inst in enumerate(pm.instruments):
+            inst_name = pretty_midi.program_to_instrument_name(inst.program) if not inst.is_drum else "Drums / Percussion"
+            instruments_info.append({
+                "track_index": int(i),
+                "name": inst.name.strip() if inst.name else f"Track {i + 1}",
+                "program": int(inst.program),
+                "instrument": inst_name,
+                "is_drum": bool(inst.is_drum),
+                "note_count": int(len(inst.notes))
+            })
+            
         result = {
             "status": "success",
             "file_path": args.file_path,
             "track_count": track_count,
             "tempo": global_tempo,
-            "note_count": note_count
+            "note_count": note_count,
+            "instruments": instruments_info
         }
         print(json.dumps(result, indent=2))
         sys.exit(0)
