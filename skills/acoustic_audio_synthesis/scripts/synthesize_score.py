@@ -229,10 +229,10 @@ def main():
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(audio_data)
             
-        abs_path = str(output_file.resolve().as_posix())
+        rel_path = output_file.relative_to(project_root).as_posix()
         print(json.dumps({
             "status": "success",
-            "audio_path": abs_path
+            "audio_path": rel_path
         }, indent=2))
         sys.exit(0)
         
