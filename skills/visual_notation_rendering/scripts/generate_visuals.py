@@ -48,7 +48,7 @@ def pitch_to_midi(pitch_str):
 
 def main():
     parser = argparse.ArgumentParser(description="Render hierarchical score state to visual plots and MusicXML.")
-    parser.add_argument("--canvas-path", help="Path to the canvas state JSON file")
+    parser.add_argument("--score-path", help="Path to the score state JSON file")
     parser.add_argument("--session-id", required=True, help="Unique ADK runtime session ID")
     args = parser.parse_args()
 
@@ -56,23 +56,23 @@ def main():
     script_dir = Path(__file__).parent.resolve()
     project_root = script_dir.parent.parent.parent.resolve()
     
-    if args.canvas_path:
-        canvas_path = Path(args.canvas_path)
+    if args.score_path:
+        score_path = Path(args.score_path)
     else:
-        canvas_path = project_root / "skills" / "score_construction" / "assets" / f"canvas_{args.session_id}.json"
+        score_path = project_root / "skills" / "score_construction" / "assets" / f"score_{args.session_id}.json"
         
     assets_dir = script_dir.parent / "assets"
     
     try:
-        if not canvas_path.is_file():
-            raise FileNotFoundError(f"Canvas state file not found: {canvas_path}")
+        if not score_path.is_file():
+            raise FileNotFoundError(f"Score state file not found: {score_path}")
             
-        with open(canvas_path, "r", encoding="utf-8") as f:
+        with open(score_path, "r", encoding="utf-8") as f:
             state = json.load(f)
             
         parts = state.get("parts", [])
         if not parts:
-            raise ValueError("Canvas has no parts to render.")
+            raise ValueError("Score has no parts to render.")
             
         # Ensure output assets folder exists
         assets_dir.mkdir(parents=True, exist_ok=True)
@@ -107,7 +107,7 @@ def main():
                 max_time = current_time
                 
         if not note_data:
-            raise ValueError("Canvas contains only rests, no notes to visualize.")
+            raise ValueError("Score contains only rests, no notes to visualize.")
             
         # Unique pitches for Y-axis ticks
         unique_pitches = {}

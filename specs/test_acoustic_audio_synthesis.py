@@ -45,8 +45,8 @@ def parse_gherkin_scenarios(feature_file_path: str):
                     "expected_audio_path": None
                 }
             elif current_scenario:
-                # Given an active score canvas state at "skills/score_construction/assets/canvas_state.json"
-                match_path = re.search(r'active score canvas state at "([^"]+)"', line)
+                # Given an active score state at "skills/score_construction/assets/score_state.json"
+                match_path = re.search(r'active score (?:canvas state|state) at "([^"]+)"', line)
                 if match_path:
                     current_scenario["canvas_path"] = match_path.group(1)
                 
@@ -139,7 +139,7 @@ async def run_evaluation():
             json.dump(test_state, f, indent=2)
         print("Canvas file pre-loaded with a rich melody.")
 
-        query = "Convert the active canvas notes into a piano WAV file."
+        query = "Convert the active score notes into a piano WAV file."
         print(f"Query: '{query}'")
         
         # Define expected tool call

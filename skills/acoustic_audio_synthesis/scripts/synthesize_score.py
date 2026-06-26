@@ -47,31 +47,31 @@ def midi_to_freq(midi_num):
 
 def main():
     parser = argparse.ArgumentParser(description="Synthesize hierarchical score state to WAV audio.")
-    parser.add_argument("--canvas-path", help="Path to the canvas state JSON file")
+    parser.add_argument("--score-path", help="Path to the score state JSON file")
     parser.add_argument("--session-id", type=str, required=True, help="Unique ADK runtime session ID")
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent.resolve()
     project_root = script_dir.parent.parent.parent.resolve()
     
-    if args.canvas_path:
-        canvas_path = Path(args.canvas_path)
+    if args.score_path:
+        score_path = Path(args.score_path)
     else:
-        canvas_path = project_root / "skills" / "score_construction" / "assets" / f"canvas_{args.session_id}.json"
+        score_path = project_root / "skills" / "score_construction" / "assets" / f"score_{args.session_id}.json"
         
     assets_dir = script_dir.parent / "assets"
     output_file = assets_dir / f"score_{args.session_id}.wav"
     
     try:
-        if not canvas_path.is_file():
-            raise FileNotFoundError(f"Canvas state file not found: {canvas_path}")
+        if not score_path.is_file():
+            raise FileNotFoundError(f"Score state file not found: {score_path}")
             
-        with open(canvas_path, "r", encoding="utf-8") as f:
+        with open(score_path, "r", encoding="utf-8") as f:
             state = json.load(f)
             
         parts = state.get("parts", [])
         if not parts:
-            raise ValueError("Canvas has no parts to synthesize.")
+            raise ValueError("Score has no parts to synthesize.")
             
         assets_dir.mkdir(parents=True, exist_ok=True)
         
@@ -174,7 +174,7 @@ def main():
                     max_beats = part_beats
                     
             if max_beats == 0.0:
-                raise ValueError("Canvas has no notes to synthesize.")
+                raise ValueError("Score has no notes to synthesize.")
                 
             total_seconds = max_beats * 0.5
             num_samples = int(total_seconds * sample_rate) + 1000

@@ -41,7 +41,7 @@ def main():
     # Determine paths
     script_dir = Path(__file__).parent.resolve()
     assets_dir = script_dir.parent / "assets"
-    state_file = assets_dir / f"canvas_{args.session_id}.json"
+    state_file = assets_dir / f"score_{args.session_id}.json"
 
     try:
         if args.command == "init":

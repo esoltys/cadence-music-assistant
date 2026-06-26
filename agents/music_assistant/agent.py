@@ -37,8 +37,8 @@ def evaluate_interval(start_note: str, end_note: str) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute interval calculation script: {e}"})
 
-def initialize_canvas(tool_context: ToolContext, time_signature: str = "4/4", key_signature: str = "C Major") -> str:
-    """Initializes a fresh localized musical score canvas.
+def initialize_score(tool_context: ToolContext, time_signature: str = "4/4", key_signature: str = "C Major") -> str:
+    """Initializes a fresh localized musical score.
 
     Args:
         tool_context: The tool execution context containing session data.
@@ -49,7 +49,7 @@ def initialize_canvas(tool_context: ToolContext, time_signature: str = "4/4", ke
         A JSON string containing the status, time_signature, key_signature, and parts_count.
     """
     project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "canvas_manager.py"
+    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -61,12 +61,12 @@ def initialize_canvas(tool_context: ToolContext, time_signature: str = "4/4", ke
             check=False
         )
         return (result.stdout or result.stderr or 
-                json.dumps({"status": "error", "error": "No output from canvas script."}))
+                json.dumps({"status": "error", "error": "No output from score manager script."}))
     except Exception as e:
-        return json.dumps({"status": "error", "error": f"Failed to execute canvas manager script: {e}"})
+        return json.dumps({"status": "error", "error": f"Failed to execute score manager script: {e}"})
 
-def add_note_to_canvas(tool_context: ToolContext, pitch: str, duration: str, part_id: str = "melody") -> str:
-    """Adds/appends a note, chord, or rest token to the score canvas for a specific part.
+def add_note_to_score(tool_context: ToolContext, pitch: str, duration: str, part_id: str = "melody") -> str:
+    """Adds/appends a note, chord, or rest token to the score for a specific part.
 
     Args:
         tool_context: The tool execution context containing session data.
@@ -78,7 +78,7 @@ def add_note_to_canvas(tool_context: ToolContext, pitch: str, duration: str, par
         A JSON string containing the status, added event details, and measure number.
     """
     project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "canvas_manager.py"
+    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -90,9 +90,9 @@ def add_note_to_canvas(tool_context: ToolContext, pitch: str, duration: str, par
             check=False
         )
         return (result.stdout or result.stderr or 
-                json.dumps({"status": "error", "error": "No output from canvas script."}))
+                json.dumps({"status": "error", "error": "No output from score manager script."}))
     except Exception as e:
-        return json.dumps({"status": "error", "error": f"Failed to execute canvas manager script: {e}"})
+        return json.dumps({"status": "error", "error": f"Failed to execute score manager script: {e}"})
 
 def analyze_midi_file(file_path: str) -> str:
     """Ingests a raw binary MIDI file and extracts track count, global tempo, and note count.
@@ -120,7 +120,7 @@ def analyze_midi_file(file_path: str) -> str:
         return json.dumps({"status": "error", "error": f"Failed to execute midi parser script: {e}"})
 
 async def render_notation(tool_context: ToolContext) -> str:
-    """Renders the current score canvas state to visual piano roll and notation timeline graphs.
+    """Renders the current score state to visual piano roll and notation timeline graphs.
 
     Args:
         tool_context: The tool execution context containing session data.
@@ -178,7 +178,7 @@ async def render_notation(tool_context: ToolContext) -> str:
         return json.dumps({"status": "error", "error": f"Failed to execute rendering script: {e}"})
 
 async def synthesize_score(tool_context: ToolContext) -> str:
-    """Synthesizes the current score canvas state to a piano WAV audio file.
+    """Synthesizes the current score state to a piano WAV audio file.
 
     Args:
         tool_context: The tool execution context containing session data.
@@ -187,7 +187,7 @@ async def synthesize_score(tool_context: ToolContext) -> str:
         A JSON string containing the status, audio_path to the synthesized WAV file, or error details.
     """
     project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "acoustic_audio_synthesis" / "scripts" / "synthesize_canvas.py"
+    script_path = project_root / "skills" / "acoustic_audio_synthesis" / "scripts" / "synthesize_score.py"
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -225,16 +225,16 @@ root_agent = Agent(
     instruction=(
         "You are a symbolic music assistant designed to help with music theory, chords, scores, and MIDI files. "
         "Use the evaluate_interval tool to compute pitch distance and interval names. "
-        "Use the initialize_canvas and add_note_to_canvas tools to manage and construct symbolic scores on the canvas. "
+        "Use the initialize_score and add_note_to_score tools to manage and construct symbolic scores. "
         "Use the analyze_midi_file tool to ingest raw MIDI files and extract track count, tempo, and note count. "
-        "Use the render_notation tool to visualize the current score canvas state as piano roll and timeline notation graphs. "
+        "Use the render_notation tool to visualize the current score state as piano roll and timeline notation graphs. "
         "When rendering visual notation, you MUST return the actual paths of the generated image assets (piano_roll, score_plot) returned by the tool formatted as inline Markdown image links, for example: "
         "![Piano Roll](skills/visual_notation_rendering/assets/piano_roll_<session_id>.png) and ![Score Plot](skills/visual_notation_rendering/assets/score_plot_<session_id>.png) (using the actual session ID from the tool response). "
         "Additionally, you MUST explicitly notify the user that the high-fidelity MusicXML asset is ready for MuseScore inspection, including its actual file path returned by the tool (e.g., `skills/visual_notation_rendering/assets/score_<session_id>.musicxml`).\n"
-        "Use the synthesize_score tool to compile the notes from the canvas state into a piano WAV audio file. "
+        "Use the synthesize_score tool to compile the notes from the score state into a piano WAV audio file. "
         "When synthesizing audio, you MUST return the actual path of the generated audio asset returned by the tool (e.g., `skills/acoustic_audio_synthesis/assets/score_<session_id>.wav`) in your final response."
     ),
-    tools=[evaluate_interval, initialize_canvas, add_note_to_canvas, analyze_midi_file, render_notation, synthesize_score],
+    tools=[evaluate_interval, initialize_score, add_note_to_score, analyze_midi_file, render_notation, synthesize_score],
 )
 
 app = App(

@@ -46,8 +46,8 @@ def parse_gherkin_scenarios(feature_file_path: str):
                     "duration": "quarter"
                 }
             elif current_scenario:
-                # When the user requests to initialize a blank canvas with time signature "4/4"
-                match_init = re.search(r'initialize a blank canvas with time signature "([^"]+)"', line)
+                # When the user requests to initialize a blank score with time signature "4/4"
+                match_init = re.search(r'initialize a blank (?:canvas|score) with time signature "([^"]+)"', line)
                 if match_init:
                     current_scenario["time_signature"] = match_init.group(1)
                 
@@ -88,12 +88,12 @@ async def run_evaluation():
         print(f"==================================================")
         session_id = f"score-eval-session-{idx}"
         user_id = "eval-user"
-        state_file = PROJECT_ROOT / "skills" / "score_construction" / "assets" / f"canvas_{session_id}.json"
+        state_file = PROJECT_ROOT / "skills" / "score_construction" / "assets" / f"score_{session_id}.json"
 
-        # Given a clean canvas state: delete/clear the state file
+        # Given a clean score state: delete/clear the state file
         if state_file.is_file():
             state_file.unlink()
-        print("Cleaned canvas state file (Given a clean canvas state)")
+        print("Cleaned score state file (Given a clean score state)")
         
         # Initialize Runner
         runner = Runner(
@@ -103,12 +103,12 @@ async def run_evaluation():
             auto_create_session=True
         )
         
-        # Turn 1: Initialize canvas
-        query1 = f"Initialize a blank canvas with time signature {sc['time_signature']}"
+        # Turn 1: Initialize score
+        query1 = f"Initialize a blank score with time signature {sc['time_signature']}"
         print(f"\nTurn 1 Query: '{query1}'")
         
         expected_tool_call1 = types.FunctionCall(
-            name="initialize_canvas",
+            name="initialize_score",
             args={"time_signature": sc["time_signature"]}
         )
         
@@ -154,7 +154,7 @@ async def run_evaluation():
         print(f"\nTurn 2 Query: '{query2}'")
         
         expected_tool_call2 = types.FunctionCall(
-            name="add_note_to_canvas",
+            name="add_note_to_score",
             args={"pitch": sc["pitch"], "duration": sc["duration"]}
         )
         
