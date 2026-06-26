@@ -9,6 +9,9 @@ dependencies = [
     "music21>=9.1.0",
     "pretty-midi>=0.2.10",
     "matplotlib>=3.8.0",
+    "google-cloud-logging>=3.16.0",
+    "opentelemetry-exporter-otlp>=1.42.1",
+    "opentelemetry-exporter-gcp-logging>=1.12.0a0",
 ]
 
 [build-system]
