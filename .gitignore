@@ -43,3 +43,7 @@ Thumbs.db
 
 # Evaluation/Run session assets
 *eval-session*
+
+# SoundFonts (large binary assets for synthesizer)
+*.sf2
+soundfonts/
