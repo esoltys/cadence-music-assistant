@@ -15,6 +15,12 @@ dependencies = [
     "tinysoundfont>=0.3.7",
 ]
 
+[project.optional-dependencies]
+eval = [
+    "pytest>=7.0.0",
+    "google-cloud-aiplatform[evaluation]>=1.158.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
