@@ -421,5 +421,88 @@ def test_instrument_management():
         state_file.unlink(missing_ok=True)
 
 
+def test_tempo_and_track_filtering():
+    from agents.music_assistant.agent import set_score_tempo, synthesize_score
+    from unittest.mock import MagicMock, AsyncMock
+    import asyncio
+    
+    session_id = "test_tempo_track_sess"
+    state_file = PROJECT_ROOT / "skills" / "score_construction" / "assets" / f"score_{session_id}.json"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize a score with two tracks/parts
+    initial_state = {
+        "time_signature": "4/4",
+        "key_signature": "C Major",
+        "tempos": [{"offset": 0.0, "bpm": 120.0}],
+        "parts": [
+            {
+                "id": "melody",
+                "name": "Melody Part",
+                "clef": "treble",
+                "program": 0,
+                "measures": [
+                    {
+                        "number": 1,
+                        "events": [
+                            {"pitches": ["C4"], "duration": "quarter"},
+                            {"pitches": ["D4"], "duration": "quarter"}
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "harmony",
+                "name": "Harmony Part",
+                "clef": "treble",
+                "program": 48, # Strings
+                "measures": [
+                    {
+                        "number": 1,
+                        "events": [
+                            {"pitches": ["E4"], "duration": "quarter"},
+                            {"pitches": ["G4"], "duration": "quarter"}
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    
+    with open(state_file, "w", encoding="utf-8") as f:
+        json.dump(initial_state, f)
+        
+    try:
+        mock_ctx = MagicMock()
+        mock_ctx.session.id = session_id
+        mock_ctx.save_artifact = AsyncMock()
+        
+        # 1. Test set_score_tempo
+        tempo_res = set_score_tempo(mock_ctx, bpm=140.0, offset=4.0)
+        tempo_data = json.loads(tempo_res)
+        assert tempo_data["status"] == "success"
+        assert tempo_data["bpm"] == 140.0
+        assert tempo_data["offset"] == 4.0
+        
+        # Verify tempos updated in JSON file
+        with open(state_file, "r") as f:
+            updated_state = json.load(f)
+        assert len(updated_state["tempos"]) == 2
+        assert updated_state["tempos"][1]["bpm"] == 140.0
+        
+        # 2. Test synthesize_score with track filtering (selecting only melody part)
+        synth_res = asyncio.run(synthesize_score(mock_ctx, tracks="melody"))
+        synth_data = json.loads(synth_res)
+        assert synth_data["status"] == "success"
+        
+        # Clean up generated wav file
+        wav_path = PROJECT_ROOT / "skills" / "acoustic_audio_synthesis" / "assets" / f"score_{session_id}.wav"
+        if wav_path.is_file():
+            wav_path.unlink()
+            
+    finally:
+        state_file.unlink(missing_ok=True)
+
+
 
 

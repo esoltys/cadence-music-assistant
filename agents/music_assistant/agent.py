@@ -562,11 +562,12 @@ async def render_notation(tool_context: ToolContext) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute rendering script: {e}"})
 
-async def synthesize_score(tool_context: ToolContext) -> str:
+async def synthesize_score(tool_context: ToolContext, tracks: str = "") -> str:
     """Synthesizes the current score state to a piano WAV audio file.
 
     Args:
         tool_context: The tool execution context containing session data.
+        tracks: Optional comma-separated list of track IDs, names, or 1-based indices/ranges (e.g. 'piano', '1', '7-8') to play/synthesize. If not specified, all tracks are synthesized.
 
     Returns:
         A JSON string containing the status, audio_path to the synthesized WAV file, or error details.
@@ -576,9 +577,13 @@ async def synthesize_score(tool_context: ToolContext) -> str:
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
+    cmd = [python_exe, str(script_path), "--session-id", session_id]
+    if tracks:
+        cmd.extend(["--tracks", tracks])
+        
     try:
         result = subprocess.run(
-            [python_exe, str(script_path), "--session-id", session_id],
+            cmd,
             capture_output=True,
             text=True,
             check=False
@@ -600,6 +605,41 @@ async def synthesize_score(tool_context: ToolContext) -> str:
                 json.dumps({"status": "error", "error": "No output from synthesis script."}))
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute synthesis script: {e}"})
+
+def set_score_tempo(tool_context: ToolContext, bpm: float, offset: float = 0.0) -> str:
+    """Sets/changes the tempo (in BPM) at a specific beat offset in the active score.
+
+    Args:
+        tool_context: The tool execution context containing session data.
+        bpm: The tempo in beats per minute (BPM).
+        offset: The beat offset at which this tempo applies (default 0.0 for start of score).
+
+    Returns:
+        A JSON string containing the status and details of the tempo setting.
+    """
+    project_root = Path(__file__).parent.parent.parent.resolve()
+    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    session_id = tool_context.session.id
+    
+    python_exe = sys.executable or "python"
+    cmd = [
+        python_exe, str(script_path), "set-tempo",
+        "--bpm", str(bpm),
+        "--offset", str(offset),
+        "--session-id", session_id
+    ]
+        
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        return (result.stdout or result.stderr or 
+                json.dumps({"status": "error", "error": "No output from score manager script."}))
+    except Exception as e:
+        return json.dumps({"status": "error", "error": f"Failed to execute score manager script: {e}"})
 
 def list_soundfonts() -> str:
     """Lists the available SoundFont (.sf2) files in the soundfonts/ directory and their descriptions.
@@ -862,12 +902,13 @@ root_agent = Agent(
         "Use the list_soundfonts tool to view available soundfont files and their descriptions.\n"
         "Use the list_soundfont_instruments tool to view all 128 General MIDI instrument programs and categories. You can search these program names to suggest appropriate instruments (e.g. various guitar patches) when users want to re-assign tracks.\n"
         "Use the assign_instrument_to_track tool to manually assign a specific General MIDI instrument (program number 0-127) and optionally flag it as unpitched percussion for a given part_id in the score.\n"
+        "Use the set_score_tempo tool to set or change the tempo (in BPM) at a specific beat offset in the active score.\n"
         "Use the analyze_midi_file tool to ingest raw MIDI files and extract track count, tempo, note count, and detailed instrument track information.\n"
         "Use the render_notation tool to visualize the current score state as piano roll and timeline notation graphs. "
         "When rendering visual notation, you MUST return the actual paths of the generated image assets (piano_roll, score_plot) returned by the tool formatted as inline Markdown image links, for example: "
         "![Piano Roll](skills/visual_notation_rendering/assets/piano_roll_<session_id>.png) and ![Score Plot](skills/visual_notation_rendering/assets/score_plot_<session_id>.png) (using the actual session ID from the tool response). "
         "Additionally, you MUST explicitly notify the user that the high-fidelity MusicXML asset is ready for MuseScore inspection, including its actual file path returned by the tool (e.g., `skills/visual_notation_rendering/assets/score_<session_id>.musicxml`).\n"
-        "Use the synthesize_score tool to compile the notes from the score state into a piano WAV audio file. "
+        "Use the synthesize_score tool to compile the notes from the score state into a WAV audio file. You can optionally filter which tracks are played/synthesized by passing a comma-separated list of track IDs, names, or 1-based indices/ranges (e.g. 'piano', '1', '7-8') to the tracks parameter. "
         "When synthesizing audio, you MUST return the actual path of the generated audio asset returned by the tool (e.g., `skills/acoustic_audio_synthesis/assets/score_<session_id>.wav`) in your final response."
     ),
     tools=[
@@ -885,6 +926,7 @@ root_agent = Agent(
         list_soundfonts,
         list_soundfont_instruments,
         assign_instrument_to_track,
+        set_score_tempo,
         render_notation,
         synthesize_score
     ],

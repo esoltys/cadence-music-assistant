@@ -49,6 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description="Synthesize hierarchical score state to WAV audio.")
     parser.add_argument("--score-path", help="Path to the score state JSON file")
     parser.add_argument("--session-id", type=str, required=True, help="Unique ADK runtime session ID")
+    parser.add_argument("--tracks", help="Comma-separated track IDs, names, or 1-based indices to play/synthesize")
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent.resolve()
@@ -73,11 +74,70 @@ def main():
         if not parts:
             raise ValueError("Score has no parts to synthesize.")
             
+        # Filter parts if --tracks is specified
+        if args.tracks:
+            selected_track_specs = [t.strip().lower() for t in args.tracks.split(",") if t.strip()]
+            filtered_parts = []
+            
+            for part_idx, part in enumerate(parts):
+                part_id = part.get("id", "").lower()
+                part_name = part.get("name", "").lower()
+                track_number_str = str(part_idx + 1)
+                
+                # Check if this part matches any of the specified tracks
+                match = False
+                for spec in selected_track_specs:
+                    # Match by 1-based index (e.g. "1", "2")
+                    if spec == track_number_str:
+                        match = True
+                        break
+                    # Match by track ID or name (e.g. "piano", "melody")
+                    if spec in part_id or spec in part_name:
+                        match = True
+                        break
+                    # Support ranges like "7-8"
+                    if "-" in spec:
+                        try:
+                            start, end = map(int, spec.split("-"))
+                            if start <= part_idx + 1 <= end:
+                                match = True
+                                break
+                        except ValueError:
+                            pass
+                            
+                if match:
+                    filtered_parts.append(part)
+                    
+            if not filtered_parts:
+                raise ValueError(f"No tracks matched the specifications: {args.tracks}")
+            parts = filtered_parts
+
         assets_dir.mkdir(parents=True, exist_ok=True)
         
         sample_rate = 44100
         volume = 0.5
         decay_rate = 3.0
+        
+        # Build tempo/time converter
+        tempos = state.get("tempos", [])
+        tempos = sorted(tempos, key=lambda x: x["offset"])
+        if not tempos or tempos[0]["offset"] > 0:
+            tempos.insert(0, {"offset": 0.0, "bpm": 120.0})
+            
+        # Precompute accumulated times at each boundary
+        accumulated_times = [0.0]
+        for i in range(len(tempos) - 1):
+            dt = tempos[i+1]["offset"] - tempos[i]["offset"]
+            seconds_per_beat = 60.0 / tempos[i]["bpm"]
+            accumulated_times.append(accumulated_times[-1] + dt * seconds_per_beat)
+            
+        def beats_to_seconds(beat_offset):
+            for i in range(len(tempos) - 1):
+                if tempos[i]["offset"] <= beat_offset < tempos[i+1]["offset"]:
+                    dt = beat_offset - tempos[i]["offset"]
+                    return accumulated_times[i] + dt * (60.0 / tempos[i]["bpm"])
+            dt = beat_offset - tempos[-1]["offset"]
+            return accumulated_times[-1] + dt * (60.0 / tempos[-1]["bpm"])
         
         # Try to synthesize using tinysoundfont if available and a soundfont exists
         sf2_dir = project_root / "soundfonts"
@@ -121,12 +181,11 @@ def main():
                     for event in measure.get("events", []):
                         dur_str = event.get("duration", "quarter").lower()
                         dur_beats = DURATION_MAP.get(dur_str, 1.0)
-                        dur_seconds = dur_beats * 0.5
                         
                         pitches = event.get("pitches", ["rest"])
                         if pitches and "rest" not in [p.lower() for p in pitches]:
-                            start_sec = current_beat * 0.5
-                            end_sec = (current_beat + dur_beats) * 0.5
+                            start_sec = beats_to_seconds(current_beat)
+                            end_sec = beats_to_seconds(current_beat + dur_beats)
                             for pitch_str in pitches:
                                 midi_num = pitch_to_midi(pitch_str)
                                 if midi_num is not None:
@@ -195,7 +254,7 @@ def main():
             if max_beats == 0.0:
                 raise ValueError("Score has no notes to synthesize.")
                 
-            total_seconds = max_beats * 0.5
+            total_seconds = beats_to_seconds(max_beats)
             num_samples = int(total_seconds * sample_rate) + 1000
             mixed_audio = [0.0] * num_samples
             
@@ -205,7 +264,9 @@ def main():
                     for event in measure.get("events", []):
                         dur_str = event.get("duration", "quarter").lower()
                         dur_beats = DURATION_MAP.get(dur_str, 1.0)
-                        dur_seconds = dur_beats * 0.5
+                        start_sec = beats_to_seconds(current_beat)
+                        end_sec = beats_to_seconds(current_beat + dur_beats)
+                        dur_seconds = end_sec - start_sec
                         event_samples = int(dur_seconds * sample_rate)
                         
                         pitches = event.get("pitches", ["rest"])
@@ -213,7 +274,7 @@ def main():
                             current_beat += dur_beats
                             continue
                             
-                        start_sample = int(current_beat * 0.5 * sample_rate)
+                        start_sample = int(start_sec * sample_rate)
                         for pitch_str in pitches:
                             try:
                                 midi_num = pitch_to_midi(pitch_str)

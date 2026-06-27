@@ -81,6 +81,12 @@ def main():
     assign_parser.add_argument("--percussion", action="store_true", help="Set track as unpitched percussion")
     assign_parser.add_argument("--session-id", required=True, help="Unique ADK runtime session ID")
 
+    # set-tempo sub-command
+    tempo_parser = subparsers.add_parser("set-tempo", help="Set/change tempo at a specific beat offset.")
+    tempo_parser.add_argument("--bpm", type=float, required=True, help="Tempo in beats per minute")
+    tempo_parser.add_argument("--offset", type=float, default=0.0, help="Beat offset from start (default 0.0)")
+    tempo_parser.add_argument("--session-id", required=True, help="Unique ADK runtime session ID")
+
     args = parser.parse_args()
 
     # Determine paths
@@ -332,6 +338,21 @@ def main():
             if ks_el:
                 ks_str = f"{ks_el[0].tonic.name} {ks_el[0].mode.capitalize()}"
                 
+            # Find all metronome marks / tempo changes
+            from music21 import tempo
+            tempos_list = []
+            metronome_marks = list(s.recurse().getElementsByClass(tempo.MetronomeMark))
+            for mm in metronome_marks:
+                tempos_list.append({
+                    "offset": mm.offset,
+                    "bpm": float(mm.number)
+                })
+                
+            if not tempos_list:
+                tempos_list = [{"offset": 0.0, "bpm": 120.0}]
+            else:
+                tempos_list = sorted(tempos_list, key=lambda x: x["offset"])
+
             parts_list = []
             parts = list(s.getElementsByClass(stream.Part))
             if not parts:
@@ -403,6 +424,7 @@ def main():
             state = {
                 "time_signature": ts_str,
                 "key_signature": ks_str,
+                "tempos": tempos_list,
                 "parts": parts_list
             }
             
@@ -460,6 +482,40 @@ def main():
                 "part_id": part_id,
                 "program": args.program,
                 "is_percussion": args.percussion
+            }, indent=2))
+            sys.exit(0)
+
+        elif args.command == "set-tempo":
+            if not state_file.is_file():
+                raise FileNotFoundError("Score has not been initialized yet. Run 'init' or 'import-midi' first.")
+                
+            with open(state_file, "r", encoding="utf-8") as f:
+                state = json.load(f)
+                
+            if "tempos" not in state:
+                state["tempos"] = []
+                
+            bpm = args.bpm
+            offset = args.offset
+            updated = False
+            for t in state["tempos"]:
+                if abs(t["offset"] - offset) < 1e-5:
+                    t["bpm"] = bpm
+                    updated = True
+                    break
+            if not updated:
+                state["tempos"].append({"offset": offset, "bpm": bpm})
+                
+            state["tempos"] = sorted(state["tempos"], key=lambda x: x["offset"])
+            
+            with open(state_file, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+                
+            print(json.dumps({
+                "status": "success",
+                "action": "set-tempo",
+                "bpm": bpm,
+                "offset": offset
             }, indent=2))
             sys.exit(0)
 

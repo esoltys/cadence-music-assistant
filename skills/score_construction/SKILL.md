@@ -6,6 +6,7 @@ allowed-tools:
   - score_manager
   - check_voice_leading
   - assign_instrument_to_track
+  - set_score_tempo
 ---
 
 # building-symbolic-scores
