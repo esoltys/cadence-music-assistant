@@ -74,6 +74,13 @@ def main():
     import_parser.add_argument("--midi-path", required=True, help="Path to the external MIDI file")
     import_parser.add_argument("--session-id", required=True, help="Unique ADK runtime session ID")
 
+    # assign-instrument sub-command
+    assign_parser = subparsers.add_parser("assign-instrument", help="Assign an instrument to a track.")
+    assign_parser.add_argument("--part-id", required=True, help="ID of the part/track (e.g. 'melody')")
+    assign_parser.add_argument("--program", type=int, required=True, help="MIDI program number (0-127)")
+    assign_parser.add_argument("--percussion", action="store_true", help="Set track as unpitched percussion")
+    assign_parser.add_argument("--session-id", required=True, help="Unique ADK runtime session ID")
+
     args = parser.parse_args()
 
     # Determine paths
@@ -339,6 +346,18 @@ def main():
                     
                 part_name = part.partName if hasattr(part, 'partName') and part.partName else part_id.capitalize()
                 
+                # Determine instrument program and percussion status
+                from music21 import instrument
+                program = 0
+                is_percussion = False
+                instruments = list(part.recurse().getElementsByClass(instrument.Instrument))
+                if instruments:
+                    for ins in instruments:
+                        if ins.midiProgram is not None:
+                            program = ins.midiProgram
+                        if isinstance(ins, instrument.UnpitchedPercussion):
+                            is_percussion = True
+                
                 # Determine clef
                 clef_str = "treble"
                 clef_el = list(part.recurse().getElementsByClass(clef.Clef))
@@ -376,6 +395,8 @@ def main():
                     "id": part_id,
                     "name": part_name,
                     "clef": clef_str,
+                    "program": program,
+                    "is_percussion": is_percussion,
                     "measures": measures_list
                 })
                 
@@ -389,12 +410,56 @@ def main():
             with open(state_file, "w", encoding="utf-8") as f:
                 json.dump(state, f, indent=2)
                 
+            # Check for uncertain parts (defaulted to program 0 but name doesn't contain 'piano' or 'keyboard')
+            uncertain_parts = []
+            for part in parts_list:
+                name_lower = part["name"].lower()
+                if part["program"] == 0 and "piano" not in name_lower and "keyboard" not in name_lower:
+                    uncertain_parts.append({
+                        "id": part["id"],
+                        "name": part["name"]
+                    })
+
             print(json.dumps({
                 "status": "success",
                 "action": "import-midi",
                 "time_signature": ts_str,
                 "key_signature": ks_str,
-                "parts_count": len(parts_list)
+                "parts_count": len(parts_list),
+                "imported_parts": [{"id": p["id"], "name": p["name"], "program": p["program"], "is_percussion": p["is_percussion"]} for p in parts_list],
+                "uncertain_parts": uncertain_parts
+            }, indent=2))
+            sys.exit(0)
+
+        elif args.command == "assign-instrument":
+            if not state_file.is_file():
+                raise FileNotFoundError("Score has not been initialized yet. Run 'init' or 'import-midi' first.")
+                
+            with open(state_file, "r", encoding="utf-8") as f:
+                state = json.load(f)
+                
+            part_id = args.part_id.strip()
+            part = None
+            for p in state.get("parts", []):
+                if p["id"] == part_id:
+                    part = p
+                    break
+                    
+            if part is None:
+                raise ValueError(f"Part ID '{part_id}' not found in active score.")
+                
+            part["program"] = args.program
+            part["is_percussion"] = args.percussion
+            
+            with open(state_file, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+                
+            print(json.dumps({
+                "status": "success",
+                "action": "assign-instrument",
+                "part_id": part_id,
+                "program": args.program,
+                "is_percussion": args.percussion
             }, indent=2))
             sys.exit(0)
 

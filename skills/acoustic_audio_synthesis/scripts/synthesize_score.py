@@ -101,9 +101,21 @@ def main():
 
         if use_tinysoundfont:
             # tinysoundfont synthesis (stereo)
+            part_channels = {}
+            next_melodic_channel = 0
+            for part_idx, part in enumerate(parts):
+                is_percussion = part.get("is_percussion", False)
+                if is_percussion:
+                    part_channels[part_idx] = 9
+                else:
+                    if next_melodic_channel == 9:
+                        next_melodic_channel += 1
+                    part_channels[part_idx] = next_melodic_channel % 16
+                    next_melodic_channel += 1
+
             midi_events = []
             for part_idx, part in enumerate(parts):
-                channel = part_idx % 16
+                channel = part_channels[part_idx]
                 current_beat = 0.0
                 for measure in part.get("measures", []):
                     for event in measure.get("events", []):
@@ -128,6 +140,13 @@ def main():
             sfid = synth.sfload(str(sf2_path))
             for channel in range(16):
                 synth.program_select(channel, sfid, 0, 0)
+                
+            for part_idx, part in enumerate(parts):
+                channel = part_channels[part_idx]
+                program = part.get("program", 0)
+                is_percussion = part.get("is_percussion", False)
+                bank = 128 if is_percussion else 0
+                synth.program_select(channel, sfid, bank, program)
             
             audio_data = bytearray()
             current_sample = 0

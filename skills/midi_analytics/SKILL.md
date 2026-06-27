@@ -1,6 +1,6 @@
 ---
 name: analyzing-midi-files
-description: Ingests raw binary MIDI assets via local paths, extracting lightweight structural summary metrics (track count, tempo, note count) without writing to disk.
+description: Ingests raw binary MIDI assets via local paths or chat attachments, extracting lightweight structural summary metrics (track count, tempo, note count) without writing to disk permanently.
 permission_tier: Read-Only
 allowed-tools:
   - parse_midi_metrics
@@ -9,7 +9,7 @@ allowed-tools:
 # analyzing-midi-files
 
 ## Focus & Capabilities
-This skill analyzes binary MIDI files located at a given local filepath. It extracts structural parameters from the MIDI file without modifying any files on disk:
+This skill analyzes binary MIDI files located at a given local filepath or attached directly to the chat. It extracts structural parameters from the MIDI file without modifying any files on disk permanently:
 - Extracting track count.
 - Computing tempo / BPM metrics.
 - Counting total notes.
@@ -17,8 +17,9 @@ This skill analyzes binary MIDI files located at a given local filepath. It extr
 ## Triggers
 This skill is triggered when the user queries for MIDI analysis, statistics, or metrics from a file, including:
 - "Analyze this MIDI file: path/to/file.mid"
-- "How many tracks are in the MIDI file at path/to/file.mid?"
-- "What is the tempo of the midi at path/to/file.mid?"
+- "Analyze the attached MIDI file."
+- "How many tracks are in the MIDI file I uploaded?"
+- "What is the tempo of the attached midi?"
 
 ## Non-Capabilities
 - This skill does NOT play or synthesize audio files.

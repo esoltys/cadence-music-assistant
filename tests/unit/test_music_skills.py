@@ -253,4 +253,173 @@ def test_voice_leading():
         temp_score_path.unlink(missing_ok=True)
 
 
+def test_midi_attachments():
+    import asyncio
+    from unittest.mock import MagicMock, AsyncMock
+    from agents.music_assistant.agent import analyze_midi_file, import_midi_to_score, detect_key
+    
+    sample_midi_path = PROJECT_ROOT / "skills" / "midi_analytics" / "assets" / "sample.mid"
+    assert sample_midi_path.is_file()
+    sample_midi_bytes = sample_midi_path.read_bytes()
+    
+    # Common mock parts
+    mock_part = MagicMock()
+    mock_part.inline_data = MagicMock()
+    mock_part.inline_data.mime_type = "audio/midi"
+    mock_part.inline_data.data = sample_midi_bytes
+    mock_part.file_data = None
+
+    # Setup async mock helper for list/load artifacts
+    async def mock_list_artifacts_empty():
+        return []
+        
+    # 1. Test inline data attachment in current turn
+    mock_ctx = MagicMock()
+    mock_ctx.session.id = "test_attachment_sess"
+    mock_ctx.user_content.parts = [mock_part]
+    mock_ctx.list_artifacts = AsyncMock(side_effect=mock_list_artifacts_empty)
+    mock_ctx.load_artifact = AsyncMock()
+    
+    # Test analyze_midi_file with attachment
+    res = asyncio.run(analyze_midi_file(tool_context=mock_ctx))
+    data = json.loads(res)
+    assert data["status"] == "success"
+    assert data["track_count"] == 1
+    assert data["note_count"] == 256
+    
+    # Test detect_key with attachment
+    res_key = asyncio.run(detect_key(tool_context=mock_ctx, midi_path=""))
+    data_key = json.loads(res_key)
+    assert data_key["status"] == "success"
+    assert "detected_key" in data_key
+    
+    # Test import_midi_to_score with attachment
+    res_import = asyncio.run(import_midi_to_score(tool_context=mock_ctx, midi_path=""))
+    data_import = json.loads(res_import)
+    assert data_import["status"] == "success"
+    
+    # Clean up the generated asset file
+    uploaded_midi_file = PROJECT_ROOT / "skills" / "midi_analytics" / "assets" / "uploaded_test_attachment_sess.mid"
+    if uploaded_midi_file.is_file():
+        uploaded_midi_file.unlink()
+        
+    score_json = PROJECT_ROOT / "skills" / "score_construction" / "assets" / "score_test_attachment_sess.json"
+    if score_json.is_file():
+        score_json.unlink()
+
+    # 2. Test attachment resolved from session history (when current turn has none)
+    mock_history_event = MagicMock()
+    mock_history_event.author = "user"
+    mock_history_event.content.parts = [mock_part]
+    
+    mock_ctx_history = MagicMock()
+    mock_ctx_history.session.id = "test_history_sess"
+    mock_ctx_history.session.events = [mock_history_event]
+    mock_ctx_history.user_content = None # No attachment in current turn
+    mock_ctx_history.list_artifacts = AsyncMock(side_effect=mock_list_artifacts_empty)
+    mock_ctx_history.load_artifact = AsyncMock()
+    
+    # Test analyze_midi_file with attachment in history
+    res_hist = asyncio.run(analyze_midi_file(tool_context=mock_ctx_history))
+    data_hist = json.loads(res_hist)
+    assert data_hist["status"] == "success"
+    assert data_hist["track_count"] == 1
+    assert data_hist["note_count"] == 256
+    
+    # Clean up history session generated asset
+    uploaded_hist_file = PROJECT_ROOT / "skills" / "midi_analytics" / "assets" / "uploaded_test_history_sess.mid"
+    if uploaded_hist_file.is_file():
+        uploaded_hist_file.unlink()
+
+    # 3. Test attachment resolved from ADK artifacts (list_artifacts / load_artifact)
+    mock_ctx_artifacts = MagicMock()
+    mock_ctx_artifacts.session.id = "test_artifacts_sess"
+    mock_ctx_artifacts.user_content = None
+    mock_ctx_artifacts.session.events = []
+    
+    async def mock_list_artifacts_with_keys():
+        return ["some_other.txt", "Bohemian_Rhapsody.mid"]
+        
+    async def mock_load_artifact(filename, version=None):
+        if filename == "Bohemian_Rhapsody.mid":
+            return mock_part
+        return None
+        
+    mock_ctx_artifacts.list_artifacts = AsyncMock(side_effect=mock_list_artifacts_with_keys)
+    mock_ctx_artifacts.load_artifact = AsyncMock(side_effect=mock_load_artifact)
+    
+    # Test analyze_midi_file with attachment in artifacts
+    res_art = asyncio.run(analyze_midi_file(tool_context=mock_ctx_artifacts))
+    data_art = json.loads(res_art)
+    assert data_art["status"] == "success"
+    assert data_art["track_count"] == 1
+    assert data_art["note_count"] == 256
+    
+    # Clean up artifacts session generated asset
+    uploaded_art_file = PROJECT_ROOT / "skills" / "midi_analytics" / "assets" / "uploaded_test_artifacts_sess.mid"
+    if uploaded_art_file.is_file():
+        uploaded_art_file.unlink()
+
+
+def test_instrument_management():
+    from agents.music_assistant.agent import list_soundfonts, list_soundfont_instruments, assign_instrument_to_track
+    from unittest.mock import MagicMock
+    
+    # 1. Test list_soundfonts
+    sf_res = list_soundfonts()
+    sf_data = json.loads(sf_res)
+    assert sf_data["status"] == "success"
+    assert len(sf_data["soundfonts"]) == 2
+    
+    # 2. Test list_soundfont_instruments
+    inst_res = list_soundfont_instruments()
+    inst_data = json.loads(inst_res)
+    assert inst_data["status"] == "success"
+    assert "Piano" in inst_data["instrument_categories"]
+    assert inst_data["instrument_categories"]["Piano"]["0"] == "Acoustic Grand Piano"
+    
+    # 3. Test assign_instrument_to_track
+    session_id = "test_assign_sess"
+    # First initialize a score so we can modify it
+    state_file = PROJECT_ROOT / "skills" / "score_construction" / "assets" / f"score_{session_id}.json"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    initial_state = {
+        "time_signature": "4/4",
+        "key_signature": "C Major",
+        "parts": [
+            {
+                "id": "melody",
+                "name": "Melody",
+                "clef": "treble",
+                "measures": []
+            }
+        ]
+    }
+    with open(state_file, "w", encoding="utf-8") as f:
+        json.dump(initial_state, f)
+        
+    try:
+        mock_ctx = MagicMock()
+        mock_ctx.session.id = session_id
+        
+        # Assign a new instrument program
+        assign_res = assign_instrument_to_track(mock_ctx, part_id="melody", program=65, is_percussion=True)
+        assign_data = json.loads(assign_res)
+        assert assign_data["status"] == "success"
+        assert assign_data["part_id"] == "melody"
+        assert assign_data["program"] == 65
+        assert assign_data["is_percussion"] is True
+        
+        # Verify JSON file has been updated
+        with open(state_file, "r") as f:
+            updated_state = json.load(f)
+        assert updated_state["parts"][0]["program"] == 65
+        assert updated_state["parts"][0]["is_percussion"] is True
+        
+    finally:
+        state_file.unlink(missing_ok=True)
+
+
+
 

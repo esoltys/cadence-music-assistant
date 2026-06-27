@@ -4,6 +4,8 @@ description: Commits system mutations by compiling note sequences into concrete 
 permission_tier: Action-Allowed
 allowed-tools:
   - synthesize_score
+  - list_soundfonts
+  - list_soundfont_instruments
 ---
 
 # synthesizing-acoustic-audio

@@ -213,12 +213,155 @@ async def export_score_to_midi(tool_context: ToolContext) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute export-midi script: {e}"})
 
-def import_midi_to_score(tool_context: ToolContext, midi_path: str) -> str:
+async def get_attached_midi_file(tool_context: ToolContext) -> str | None:
+    """Helper to check the ToolContext for attached MIDI files in the current turn, session history, or artifacts.
+    If found, saves it locally to assets/uploaded_<session_id>.mid and returns the path.
+    """
+    if not tool_context:
+        return None
+
+    def get_field(obj, field_name, default=None):
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            return obj.get(field_name, default)
+        return getattr(obj, field_name, default)
+
+    def extract_from_part(part) -> bytes | None:
+        if not part:
+            return None
+        inline_data = get_field(part, "inline_data")
+        if inline_data:
+            mime = (get_field(inline_data, "mime_type") or "").lower()
+            data = get_field(inline_data, "data")
+            midi_mime_types = {"audio/midi", "audio/mid", "audio/x-midi", "audio/sp-midi"}
+            if mime in midi_mime_types or (data and data.startswith(b"MThd")):
+                return data
+                
+        file_data = get_field(part, "file_data")
+        if file_data:
+            mime = (get_field(file_data, "mime_type") or "").lower()
+            file_uri = get_field(file_data, "file_uri")
+            midi_mime_types = {"audio/midi", "audio/mid", "audio/x-midi", "audio/sp-midi"}
+            if mime in midi_mime_types or "octet-stream" in mime:
+                try:
+                    from google.genai import Client
+                    client = Client()
+                    data = client.files.download(file=file_uri)
+                    if data:
+                        return data
+                except Exception as e:
+                    print(f"Failed to download attached file from file_uri: {e}")
+        return None
+
+    def extract_from_content(content) -> bytes | None:
+        if not content:
+            return None
+        parts = get_field(content, "parts")
+        if not parts:
+            return None
+            
+        for part in parts:
+            data = extract_from_part(part)
+            if data:
+                return data
+                        
+        # Fallback search checking for header
+        for part in parts:
+            inline_data = get_field(part, "inline_data")
+            if inline_data:
+                data = get_field(inline_data, "data")
+                if data and data.startswith(b"MThd"):
+                    return data
+            file_data = get_field(part, "file_data")
+            if file_data:
+                file_uri = get_field(file_data, "file_uri")
+                try:
+                    from google.genai import Client
+                    client = Client()
+                    data = client.files.download(file=file_uri)
+                    if data and data.startswith(b"MThd"):
+                        return data
+                except Exception:
+                    pass
+        return None
+
+    midi_bytes = None
+    
+    # 1. Check current turn's user content
+    if tool_context.user_content:
+        midi_bytes = extract_from_content(tool_context.user_content)
+        
+    # 2. Check session history in reverse order
+    if not midi_bytes and tool_context.session:
+        events = get_field(tool_context.session, "events") or []
+        for event in reversed(events):
+            author = get_field(event, "author")
+            if author == "user":
+                content = get_field(event, "content")
+                if content:
+                    midi_bytes = extract_from_content(content)
+                    if midi_bytes:
+                        break
+
+    # 3. Check artifacts registered in the session
+    if not midi_bytes:
+        try:
+            artifact_keys = await tool_context.list_artifacts()
+            # Look for MIDI file keys (case-insensitive check for .mid or .midi extension)
+            midi_keys = [k for k in artifact_keys if k.lower().endswith((".mid", ".midi"))]
+            if not midi_keys:
+                midi_keys = artifact_keys
+                
+            for key in reversed(midi_keys):
+                part = await tool_context.load_artifact(filename=key)
+                if part:
+                    data = extract_from_part(part)
+                    if data:
+                        midi_bytes = data
+                        break
+                    # Fallback to check if raw bytes start with MThd
+                    inline_data = get_field(part, "inline_data")
+                    if inline_data:
+                        raw_data = get_field(inline_data, "data")
+                        if raw_data and raw_data.startswith(b"MThd"):
+                            midi_bytes = raw_data
+                            break
+                    file_data = get_field(part, "file_data")
+                    if file_data:
+                        file_uri = get_field(file_data, "file_uri")
+                        try:
+                            from google.genai import Client
+                            client = Client()
+                            raw_data = client.files.download(file=file_uri)
+                            if raw_data and raw_data.startswith(b"MThd"):
+                                midi_bytes = raw_data
+                                break
+                        except Exception:
+                            pass
+        except Exception as e:
+            print(f"Failed to load or list artifacts: {e}")
+
+    if midi_bytes:
+        project_root = Path(__file__).parent.parent.parent.resolve()
+        session_id = tool_context.session.id
+        assets_dir = project_root / "skills" / "midi_analytics" / "assets"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        uploaded_path = assets_dir / f"uploaded_{session_id}.mid"
+        try:
+            uploaded_path.write_bytes(midi_bytes)
+            return str(uploaded_path)
+        except Exception as e:
+            print(f"Failed to write uploaded MIDI file to disk: {e}")
+            
+    return None
+
+async def import_midi_to_score(tool_context: ToolContext, midi_path: str = "") -> str:
     """Imports an external MIDI file into the active score state, overwriting the current score.
 
     Args:
         tool_context: The tool execution context containing session data.
-        midi_path: The local path to the MIDI file to import.
+        midi_path: Optional local path to the MIDI file to import. If not provided, attempts to use an attached MIDI file.
 
     Returns:
         A JSON string containing the status, imported time/key signature, and part count.
@@ -227,10 +370,23 @@ def import_midi_to_score(tool_context: ToolContext, midi_path: str) -> str:
     script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
     session_id = tool_context.session.id
     
+    resolved_path = ""
+    if midi_path and Path(midi_path).is_file():
+        resolved_path = midi_path
+    else:
+        attachment_path = await get_attached_midi_file(tool_context)
+        if attachment_path:
+            resolved_path = attachment_path
+        elif midi_path:
+            resolved_path = midi_path
+
+    if not resolved_path:
+        return json.dumps({"status": "error", "error": "No MIDI file path provided and no attached MIDI file found in the chat."})
+
     python_exe = sys.executable or "python"
     try:
         result = subprocess.run(
-            [python_exe, str(script_path), "import-midi", "--midi-path", midi_path, "--session-id", session_id],
+            [python_exe, str(script_path), "import-midi", "--midi-path", resolved_path, "--session-id", session_id],
             capture_output=True,
             text=True,
             check=False
@@ -240,11 +396,12 @@ def import_midi_to_score(tool_context: ToolContext, midi_path: str) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute import-midi script: {e}"})
 
-def analyze_midi_file(file_path: str) -> str:
+async def analyze_midi_file(tool_context: ToolContext, file_path: str = "") -> str:
     """Ingests a raw binary MIDI file and extracts track count, global tempo, note count, and detailed instrument listing.
 
     Args:
-        file_path: The local path to the MIDI file to analyze.
+        tool_context: The tool execution context containing session data.
+        file_path: Optional local path to the MIDI file to analyze. If not provided, attempts to use an attached MIDI file.
 
     Returns:
         A JSON string containing the status, track_count, tempo, note_count, list of instruments (names, programs, note counts), or error details.
@@ -252,10 +409,23 @@ def analyze_midi_file(file_path: str) -> str:
     project_root = Path(__file__).parent.parent.parent.resolve()
     script_path = project_root / "skills" / "midi_analytics" / "scripts" / "parse_midi_metrics.py"
     
+    resolved_path = ""
+    if file_path and Path(file_path).is_file():
+        resolved_path = file_path
+    else:
+        attachment_path = await get_attached_midi_file(tool_context)
+        if attachment_path:
+            resolved_path = attachment_path
+        elif file_path:
+            resolved_path = file_path
+
+    if not resolved_path:
+        return json.dumps({"status": "error", "error": "No MIDI file path provided and no attached MIDI file found in the chat."})
+
     python_exe = sys.executable or "python"
     try:
         result = subprocess.run(
-            [python_exe, str(script_path), "--file-path", file_path],
+            [python_exe, str(script_path), "--file-path", resolved_path],
             capture_output=True,
             text=True,
             check=False
@@ -265,12 +435,12 @@ def analyze_midi_file(file_path: str) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute midi parser script: {e}"})
 
-def detect_key(tool_context: ToolContext, midi_path: str = "") -> str:
+async def detect_key(tool_context: ToolContext, midi_path: str = "") -> str:
     """Analyzes the active score session or an external MIDI file to detect the musical key and confidence.
 
     Args:
         tool_context: The tool execution context containing session data.
-        midi_path: Optional local path to a MIDI file to analyze instead of the active score.
+        midi_path: Optional local path or indicator for a MIDI file to analyze instead of the active score. If there is a MIDI file attached to the chat, that file will be used when a path is not found on disk.
 
     Returns:
         A JSON string containing the status, detected key, confidence score, and alternative keys.
@@ -279,10 +449,20 @@ def detect_key(tool_context: ToolContext, midi_path: str = "") -> str:
     script_path = project_root / "skills" / "music_theory_query" / "scripts" / "detect_key.py"
     session_id = tool_context.session.id
     
+    resolved_path = ""
+    if midi_path and Path(midi_path).is_file():
+        resolved_path = midi_path
+    else:
+        attachment_path = await get_attached_midi_file(tool_context)
+        if attachment_path:
+            resolved_path = attachment_path
+        elif midi_path:
+            resolved_path = midi_path
+
     python_exe = sys.executable or "python"
     cmd = [python_exe, str(script_path)]
-    if midi_path:
-        cmd.extend(["--midi-path", midi_path])
+    if resolved_path:
+        cmd.extend(["--midi-path", resolved_path])
     else:
         cmd.extend(["--session-id", session_id])
         
@@ -421,6 +601,245 @@ async def synthesize_score(tool_context: ToolContext) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute synthesis script: {e}"})
 
+def list_soundfonts() -> str:
+    """Lists the available SoundFont (.sf2) files in the soundfonts/ directory and their descriptions.
+
+    Returns:
+        A JSON string containing the status and list of soundfonts with their names, sizes, and descriptions.
+    """
+    soundfonts_info = [
+        {
+            "filename": "TimGM6mb.sf2",
+            "name": "TimGM6mb General MIDI SoundFont",
+            "size": "6 MB",
+            "description": "Standard General MIDI soundfont containing 128 instrumental patches (pianos, organs, guitars, strings, brass, drums, etc.). Good for full orchestration and multi-instrument arrangements.",
+            "is_default": True
+        },
+        {
+            "filename": "SalamanderGrandPiano-V3+20200602.sf2",
+            "name": "Salamander Grand Piano",
+            "size": "1.27 GB",
+            "description": "High-fidelity, multi-velocity sampled Yamaha C5 grand piano. Ideal for high-quality solo piano or classical piano arrangements.",
+            "is_default": False
+        }
+    ]
+    return json.dumps({
+        "status": "success",
+        "soundfonts": soundfonts_info
+    }, indent=2)
+
+def list_soundfont_instruments() -> str:
+    """Lists the available instruments / patches inside the General MIDI soundfont (TimGM6mb.sf2).
+
+    Returns:
+        A JSON string containing the list of categories and General MIDI instruments.
+    """
+    gm_instruments = {
+        "Piano": {
+            0: "Acoustic Grand Piano",
+            1: "Bright Acoustic Piano",
+            2: "Electric Grand Piano",
+            3: "Honky-tonk Piano",
+            4: "Electric Piano 1",
+            5: "Electric Piano 2",
+            6: "Harpsichord",
+            7: "Clavinet"
+        },
+        "Chromatic Percussion": {
+            8: "Celesta",
+            9: "Glockenspiel",
+            10: "Music Box",
+            11: "Vibraphone",
+            12: "Marimba",
+            13: "Xylophone",
+            14: "Tubular Bells",
+            15: "Dulcimer"
+        },
+        "Organ": {
+            16: "Drawbar Organ",
+            17: "Percussive Organ",
+            18: "Rock Organ",
+            19: "Church Organ",
+            20: "Reed Organ",
+            21: "Accordion",
+            22: "Harmonica",
+            23: "Tango Accordion"
+        },
+        "Guitar": {
+            24: "Acoustic Guitar (nylon)",
+            25: "Acoustic Guitar (steel)",
+            26: "Electric Guitar (jazz)",
+            27: "Electric Guitar (clean)",
+            28: "Electric Guitar (muted)",
+            29: "Overdriven Guitar",
+            30: "Distortion Guitar",
+            31: "Guitar harmonics"
+        },
+        "Bass": {
+            32: "Acoustic Bass",
+            33: "Electric Bass (finger)",
+            34: "Electric Bass (pick)",
+            35: "Fretless Bass",
+            36: "Slap Bass 1",
+            37: "Slap Bass 2",
+            38: "Synth Bass 1",
+            39: "Synth Bass 2"
+        },
+        "Strings": {
+            40: "Violin",
+            41: "Viola",
+            42: "Cello",
+            43: "Contrabass",
+            44: "Tremolo Strings",
+            45: "Pizzicato Strings",
+            46: "Orchestral Harp",
+            47: "Timpani"
+        },
+        "Ensemble": {
+            48: "String Ensemble 1",
+            49: "String Ensemble 2",
+            50: "Synth Strings 1",
+            51: "Synth Strings 2",
+            52: "Choir Aahs",
+            53: "Voice Oohs",
+            54: "Synth Voice",
+            55: "Orchestra Hit"
+        },
+        "Brass": {
+            56: "Trumpet",
+            57: "Trombone",
+            58: "Tuba",
+            59: "Muted Trumpet",
+            60: "French Horn",
+            61: "Brass Section",
+            62: "Synth Brass 1",
+            63: "Synth Brass 2"
+        },
+        "Reed": {
+            64: "Soprano Sax",
+            65: "Alto Sax",
+            66: "Tenor Sax",
+            67: "Baritone Sax",
+            68: "Oboe",
+            69: "English Horn",
+            70: "Bassoon",
+            71: "Clarinet"
+        },
+        "Pipe": {
+            72: "Piccolo",
+            73: "Flute",
+            74: "Recorder",
+            75: "Pan Flute",
+            76: "Blown Bottle",
+            77: "Shakuhachi",
+            78: "Whistle",
+            79: "Ocarina"
+        },
+        "Synth Lead": {
+            80: "Lead 1 (square)",
+            81: "Lead 2 (sawtooth)",
+            82: "Lead 3 (calliope)",
+            83: "Lead 4 (chiff)",
+            84: "Lead 5 (charang)",
+            85: "Lead 6 (voice)",
+            86: "Lead 7 (fifths)",
+            87: "Lead 8 (bass + lead)"
+        },
+        "Synth Pad": {
+            88: "Pad 1 (new age)",
+            89: "Pad 2 (warm)",
+            90: "Pad 3 (polysynth)",
+            91: "Pad 4 (choir)",
+            92: "Pad 5 (bowed)",
+            93: "Pad 6 (metallic)",
+            94: "Pad 7 (halo)",
+            95: "Pad 8 (sweep)"
+        },
+        "Synth Effects": {
+            96: "FX 1 (rain)",
+            97: "FX 2 (soundtrack)",
+            98: "FX 3 (crystal)",
+            99: "FX 4 (atmosphere)",
+            100: "FX 5 (brightness)",
+            101: "FX 6 (goblins)",
+            102: "FX 7 (echoes)",
+            103: "FX 8 (sci-fi)"
+        },
+        "Ethnic": {
+            104: "Sitar",
+            105: "Banjo",
+            106: "Shamisen",
+            107: "Koto",
+            108: "Kalimba",
+            109: "Bagpipe",
+            110: "Fiddle",
+            111: "Shanai"
+        },
+        "Percussive": {
+            112: "Tinkle Bell",
+            113: "Agogo",
+            114: "Steel Drums",
+            115: "Woodblock",
+            116: "Taiko Drum",
+            117: "Melodic Tom",
+            118: "Synth Drum",
+            119: "Reverse Cymbal"
+        },
+        "Sound Effects": {
+            120: "Guitar Fret Noise",
+            121: "Breath Noise",
+            122: "Seashore",
+            123: "Bird Tweet",
+            124: "Telephone Ring",
+            125: "Helicopter",
+            126: "Applause",
+            127: "Gunshot"
+        }
+    }
+    return json.dumps({
+        "status": "success",
+        "soundfont": "TimGM6mb.sf2",
+        "instrument_categories": gm_instruments
+    }, indent=2)
+
+def assign_instrument_to_track(tool_context: ToolContext, part_id: str, program: int, is_percussion: bool = False) -> str:
+    """Manually assigns a specific General MIDI instrument (program number 0-127) to a track/part in the active score.
+
+    Args:
+        tool_context: The tool execution context containing session data.
+        part_id: The ID of the part/track (e.g. 'melody', 'part_1').
+        program: The MIDI program number (0-127) for the instrument.
+        is_percussion: Set to True if this track is unpitched drums/percussion.
+
+    Returns:
+        A JSON string containing the status and details of the assignment.
+    """
+    project_root = Path(__file__).parent.parent.parent.resolve()
+    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    session_id = tool_context.session.id
+    
+    python_exe = sys.executable or "python"
+    cmd = [
+        python_exe, str(script_path), "assign-instrument",
+        "--part-id", part_id,
+        "--program", str(program),
+        "--session-id", session_id
+    ]
+    if is_percussion:
+        cmd.append("--percussion")
+        
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        return (result.stdout or result.stderr or 
+                json.dumps({"status": "error", "error": "No output from score manager script."}))
+    except Exception as e:
+        return json.dumps({"status": "error", "error": f"Failed to execute score manager script: {e}"})
+
 root_agent = Agent(
     name="music_assistant_root",
     model=Gemini(
@@ -429,6 +848,7 @@ root_agent = Agent(
     ),
     instruction=(
         "You are a symbolic music assistant designed to help with music theory, chords, scores, and MIDI files.\n"
+        "When a user attaches or uploads a MIDI file to the chat, you must call the appropriate tool (such as analyze_midi_file, import_midi_to_score, or detect_key) with the path parameter (file_path or midi_path) left empty or omitted, as the tool will automatically extract and process the attachment from the chat context.\n"
         "Use the evaluate_interval tool to compute pitch distance and interval names.\n"
         "Use the list_scale_pitches tool to generate the notes/pitches of a specific scale or mode (major, minor, dorian, phrygian, lydian, mixolydian, locrian).\n"
         "Use the analyze_chord tool to identify a chord's common name and optionally perform Roman numeral analysis in a given key.\n"
@@ -437,7 +857,11 @@ root_agent = Agent(
         "Use the transpose_score tool to transpose all notes/chords and key signatures in the active score up or down by a given number of semitones.\n"
         "Use the validate_voice_leading tool to check the active score for classical voice-leading violations (parallel fifths/octaves) and range errors.\n"
         "Use the export_score_to_midi tool to export the active score to a standard MIDI file. When exporting MIDI, you MUST return the actual path of the generated MIDI asset returned by the tool (e.g., `skills/score_construction/assets/score_<session_id>.mid`) in your final response.\n"
-        "Use the import_midi_to_score tool to load an external MIDI file into the active score session. When importing a MIDI file, notify the user that the score has been updated, and suggest visualizing or synthesizing it.\n"
+        "Use the import_midi_to_score tool to load an external MIDI file into the active score session. When you run import_midi_to_score, you MUST list the automatically assigned instruments for all tracks in your response to the user. "
+        "Additionally, if the tool returns any tracks in 'uncertain_parts' (meaning they defaulted to Acoustic Grand Piano (0) but their track names suggest they might be different instruments), you MUST ask the user for clarification about which General MIDI instruments they want to assign to those tracks.\n"
+        "Use the list_soundfonts tool to view available soundfont files and their descriptions.\n"
+        "Use the list_soundfont_instruments tool to view all 128 General MIDI instrument programs and categories. You can search these program names to suggest appropriate instruments (e.g. various guitar patches) when users want to re-assign tracks.\n"
+        "Use the assign_instrument_to_track tool to manually assign a specific General MIDI instrument (program number 0-127) and optionally flag it as unpitched percussion for a given part_id in the score.\n"
         "Use the analyze_midi_file tool to ingest raw MIDI files and extract track count, tempo, note count, and detailed instrument track information.\n"
         "Use the render_notation tool to visualize the current score state as piano roll and timeline notation graphs. "
         "When rendering visual notation, you MUST return the actual paths of the generated image assets (piano_roll, score_plot) returned by the tool formatted as inline Markdown image links, for example: "
@@ -458,6 +882,9 @@ root_agent = Agent(
         export_score_to_midi,
         import_midi_to_score,
         analyze_midi_file,
+        list_soundfonts,
+        list_soundfont_instruments,
+        assign_instrument_to_track,
         render_notation,
         synthesize_score
     ],
