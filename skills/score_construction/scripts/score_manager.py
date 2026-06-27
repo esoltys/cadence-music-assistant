@@ -267,12 +267,26 @@ def main():
                 m21_part = stream.Part()
                 m21_part.id = part.get("id", f"part_{part_idx}")
                 
+                # Resolve instrument based on program and percussion flag
+                from music21 import instrument
+                if part.get("is_percussion", False):
+                    inst = instrument.Percussion()
+                else:
+                    program = part.get("program", 0)
+                    try:
+                        inst = instrument.instrumentFromMidiProgram(program)
+                    except Exception:
+                        inst = instrument.Instrument()
+                inst.partName = part.get("name", f"Part {part_idx + 1}")
+                inst.partId = part.get("id", f"part_{part_idx}")
+                
                 for measure_idx, measure_item in enumerate(part.get("measures", [])):
                     m21_measure = stream.Measure()
                     m21_measure.number = measure_item.get("number", measure_idx + 1)
                     
                     # Add metadata to the first measure
                     if measure_idx == 0:
+                        m21_measure.append(inst)
                         clef_str = part.get("clef", "treble").lower()
                         if clef_str == "bass":
                             m21_measure.append(clef.BassClef())
