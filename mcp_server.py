@@ -87,6 +87,7 @@ def _run_script(script_path: Path, args: list[str]) -> str:
             capture_output=True,
             text=True,
             check=False,
+            stdin=subprocess.DEVNULL,
         )
         return result.stdout or result.stderr or json.dumps(
             {"status": "error", "error": "No output from script."}

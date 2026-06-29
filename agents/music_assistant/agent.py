@@ -78,7 +78,8 @@ def evaluate_interval(start_note: str, end_note: str) -> str:
             [python_exe, str(script_path), start_note, end_note],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from execution script."}))
@@ -105,7 +106,8 @@ def list_scale_pitches(tonic: str, scale_type: str) -> str:
             [python_exe, str(script_path), tonic, scale_type],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from scale spelling script."}))
@@ -136,7 +138,8 @@ def analyze_chord(pitches: str, key_signature: str = "") -> str:
             cmd,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from chord analysis script."}))
@@ -165,7 +168,8 @@ def initialize_score(tool_context: ToolContext, time_signature: str = "4/4", key
             [python_exe, str(script_path), "init", "--time-signature", time_signature, "--key-signature", key_signature, "--session-id", session_id],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from score manager script."}))
@@ -196,7 +200,8 @@ def add_note_to_score(tool_context: ToolContext, pitch: str, duration: str, part
             [python_exe, str(script_path), "add", "--pitch", pitch, "--duration", duration, "--part-id", part_id, "--session-id", session_id],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from score manager script."}))
@@ -222,7 +227,8 @@ def transpose_score(tool_context: ToolContext, semitones: int) -> str:
             [python_exe, str(script_path), "transpose", "--semitones", str(semitones), "--session-id", session_id],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from score transposition script."}))
@@ -247,7 +253,8 @@ async def export_score_to_midi(tool_context: ToolContext) -> str:
             [python_exe, str(script_path), "export-midi", "--session-id", session_id],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         
         # Load and save MIDI artifact if successful
@@ -444,7 +451,8 @@ async def import_midi_to_score(tool_context: ToolContext, midi_path: str = "") -
             [python_exe, str(script_path), "import-midi", "--midi-path", resolved_path, "--session-id", session_id],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from import-midi script."}))
@@ -484,7 +492,8 @@ async def analyze_midi_file(tool_context: ToolContext, file_path: str = "") -> s
             [python_exe, str(script_path), "--file-path", resolved_path],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from midi parser script."}))
@@ -528,7 +537,8 @@ async def detect_key(tool_context: ToolContext, midi_path: str = "") -> str:
             cmd,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from key detection script."}))
@@ -553,7 +563,8 @@ def validate_voice_leading(tool_context: ToolContext) -> str:
             [python_exe, str(script_path), "--session-id", session_id],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from voice leading checker script."}))
@@ -584,7 +595,8 @@ async def render_notation(tool_context: ToolContext, tracks: str = "") -> str:
             cmd,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         
         # Load and save artifacts
@@ -651,7 +663,8 @@ async def synthesize_score(tool_context: ToolContext, tracks: str = "", soundfon
             cmd,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         
         # Load and save WAV artifact if successful
@@ -698,7 +711,8 @@ def set_score_tempo(tool_context: ToolContext, bpm: float, offset: float = 0.0) 
             cmd,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from score manager script."}))
@@ -937,7 +951,8 @@ def assign_instrument_to_track(tool_context: ToolContext, part_id: str, program:
             cmd,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            stdin=subprocess.DEVNULL
         )
         return (result.stdout or result.stderr or 
                 json.dumps({"status": "error", "error": "No output from score manager script."}))
