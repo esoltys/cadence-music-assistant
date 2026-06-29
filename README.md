@@ -13,13 +13,15 @@
 
 ## 🎯 The Problem
 
-Music education has a fundamental accessibility gap. Learning music theory—intervals, scales, chords, voice-leading—has traditionally required either expensive lessons or wrestling with technical software like Sibelius or MuseScore that assumes significant prior knowledge. Students and hobbyist composers face the same friction repeatedly:
+Learning and creating music has always had a gap between the idea in your head and getting it out into the world. That gap shows up in a few recurring ways:
 
-- **Feedback is slow.** Writing a melody and checking it for voice-leading errors means manually cross-referencing rules you half-remember.
-- **Tools are siloed.** You analyze theory in one app, compose in another, synthesize audio in a third—with no shared context between them.
-- **The gap between an idea and hearing it is wide.** Converting a harmonic idea to an audible result requires MIDI editors, soundfonts, and DAW setup.
+- **Theory questions interrupt the creative flow.** "What chord is this?" "What scale fits here?" "What interval is that?" — questions that should take seconds instead pull you to a textbook, a search engine, or a YouTube video.
+- **The gap between idea and audio is wide.** Turning a musical idea into something you can actually *hear* means setting up a DAW, finding a soundfont, configuring a MIDI editor — a barrier that stops many ideas before they start.
+- **Tools are completely siloed.** You analyze theory in one app, compose in another, render notation in a third, and synthesize audio in a fourth. Nothing shares context, so every step means starting over.
 
-AI agents are uniquely positioned to solve this because music tasks are inherently **multi-step and stateful**: building a score, transposing it, checking voice-leading, visualizing it, and synthesizing audio are steps in a single creative session—not independent queries. A conversational agent can hold that context and orchestrate all the tools as one coherent workflow.
+For students in formal music theory courses, there's an additional pain: writing four-part harmony exercises by hand means manually scanning for voice-leading errors (parallel fifths, octaves, range violations) — tedious, error-prone work that eats time that could be spent actually learning.
+
+AI agents are uniquely positioned to solve this because music tasks are inherently **multi-step and stateful**: building a score, asking a theory question, visualizing it, and hearing it are steps in a single creative session — not independent queries. A conversational agent can hold that context and orchestrate all the tools as one coherent workflow.
 
 ---
 
@@ -27,12 +29,14 @@ AI agents are uniquely positioned to solve this because music tasks are inherent
 
 The **Symbolic Music Assistant** is a conversational AI agent that acts as an intelligent music co-pilot. Through natural language, it lets you:
 
+- Ask theory questions — intervals, chords, scales, key detection — and get instant, accurate answers
 - Build multi-part musical scores note by note, or import existing MIDI files
-- Ask theory questions and get instant, accurate answers
+- Hear your composition as a synthesized WAV in seconds, with your choice of soundfont
 - Visualize your score as a piano roll or export MusicXML for MuseScore
-- Hear your composition as a synthesized WAV in seconds
+- For theory students: validate voice-leading rules (parallel fifths, octaves, vocal ranges) automatically
 
-**Why agents?** Because the tasks are multi-step and contextual. When a user says _"build a 4/4 score in G Major, add a melody, check it for voice-leading errors, then synthesize it as audio"_, they are describing a **pipeline of 4–5 tool calls** that must share session state. An agent with working memory and tool-use is the natural fit—no static pipeline could handle the open-ended variations a human conversation produces.
+**Why agents?** Because the tasks are multi-step and contextual. When a user says _"I have a melody idea — let me build it, check what key it suggests, visualize it, then hear it"_, they're describing a **pipeline of 4–5 tool calls** that must share session state. An agent with working memory and tool-use is the natural fit — no static pipeline could handle the open-ended, conversational nature of real creative work.
+
 
 ---
 
