@@ -445,33 +445,46 @@ async def get_attached_midi_file(tool_context: ToolContext) -> str | None:
             
     return None
 
-async def import_midi_to_score(tool_context: ToolContext, midi_path: str = "") -> str:
+async def import_midi_to_score(tool_context: ToolContext, midi_path: str = "", file_content_base64: str = "") -> str:
     """Imports an external MIDI file into the active score state, overwriting the current score.
 
     Args:
         tool_context: The tool execution context containing session data.
-        midi_path: Optional local path to the MIDI file to import. If not provided, attempts to use an attached MIDI file.
+        midi_path: Optional local path to the MIDI file to import.
+        file_content_base64: Optional base64-encoded content of the MIDI file.
 
     Returns:
         A JSON string containing the status, imported time/key signature, and part count.
     """
+    import base64
     script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
     session_id = tool_context.session.id
 
-    # Security: resolve and validate the path stays inside the project root
     resolved_path = ""
-    safe = _safe_resolve_path(midi_path) if midi_path else None
-    if safe and Path(safe).is_file():
-        resolved_path = safe
+    if file_content_base64:
+        try:
+            content = base64.b64decode(file_content_base64)
+            assets_dir = _PROJECT_ROOT / "skills" / "score_construction" / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            uploaded_path = assets_dir / f"uploaded_{session_id}.mid"
+            uploaded_path.write_bytes(content)
+            resolved_path = str(uploaded_path.resolve())
+        except Exception as e:
+            return json.dumps({"status": "error", "error": f"Failed to decode base64 MIDI content: {e}"})
     else:
-        attachment_path = await get_attached_midi_file(tool_context)
-        if attachment_path:
-            resolved_path = attachment_path
-        elif midi_path:
-            resolved_path = midi_path
+        # Security: resolve and validate the path stays inside allowed directories
+        safe = _safe_resolve_path(midi_path) if midi_path else None
+        if safe and Path(safe).is_file():
+            resolved_path = safe
+        else:
+            attachment_path = await get_attached_midi_file(tool_context)
+            if attachment_path:
+                resolved_path = attachment_path
+            elif midi_path:
+                resolved_path = midi_path
 
     if not resolved_path:
-        return json.dumps({"status": "error", "error": "No MIDI file path provided and no attached MIDI file found in the chat."})
+        return json.dumps({"status": "error", "error": "No MIDI file path provided, no base64 content, and no attached MIDI file found in the chat."})
 
     python_exe = sys.executable or "python"
     try:
@@ -487,32 +500,46 @@ async def import_midi_to_score(tool_context: ToolContext, midi_path: str = "") -
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute import-midi script: {e}"})
 
-async def analyze_midi_file(tool_context: ToolContext, file_path: str = "") -> str:
+async def analyze_midi_file(tool_context: ToolContext, file_path: str = "", file_content_base64: str = "") -> str:
     """Ingests a raw binary MIDI file and extracts track count, global tempo, note count, and detailed instrument listing.
 
     Args:
         tool_context: The tool execution context containing session data.
-        file_path: Optional local path to the MIDI file to analyze. If not provided, attempts to use an attached MIDI file.
+        file_path: Optional local path to the MIDI file to analyze.
+        file_content_base64: Optional base64-encoded content of the MIDI file.
 
     Returns:
         A JSON string containing the status, track_count, tempo, note_count, list of instruments (names, programs, note counts), or error details.
     """
+    import base64
     script_path = _PROJECT_ROOT / "skills" / "midi_analytics" / "scripts" / "parse_midi_metrics.py"
+    session_id = tool_context.session.id
 
-    # Security: resolve and validate the path stays inside the project root
     resolved_path = ""
-    safe = _safe_resolve_path(file_path) if file_path else None
-    if safe and Path(safe).is_file():
-        resolved_path = safe
+    if file_content_base64:
+        try:
+            content = base64.b64decode(file_content_base64)
+            assets_dir = _PROJECT_ROOT / "skills" / "midi_analytics" / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            uploaded_path = assets_dir / f"uploaded_{session_id}.mid"
+            uploaded_path.write_bytes(content)
+            resolved_path = str(uploaded_path.resolve())
+        except Exception as e:
+            return json.dumps({"status": "error", "error": f"Failed to decode base64 MIDI content: {e}"})
     else:
-        attachment_path = await get_attached_midi_file(tool_context)
-        if attachment_path:
-            resolved_path = attachment_path
-        elif file_path:
-            resolved_path = file_path
+        # Security: resolve and validate the path stays inside allowed directories
+        safe = _safe_resolve_path(file_path) if file_path else None
+        if safe and Path(safe).is_file():
+            resolved_path = safe
+        else:
+            attachment_path = await get_attached_midi_file(tool_context)
+            if attachment_path:
+                resolved_path = attachment_path
+            elif file_path:
+                resolved_path = file_path
 
     if not resolved_path:
-        return json.dumps({"status": "error", "error": "No MIDI file path provided and no attached MIDI file found in the chat."})
+        return json.dumps({"status": "error", "error": "No MIDI file path provided, no base64 content, and no attached MIDI file found in the chat."})
 
     python_exe = sys.executable or "python"
     try:
@@ -528,30 +555,43 @@ async def analyze_midi_file(tool_context: ToolContext, file_path: str = "") -> s
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute midi parser script: {e}"})
 
-async def detect_key(tool_context: ToolContext, midi_path: str = "") -> str:
+async def detect_key(tool_context: ToolContext, midi_path: str = "", file_content_base64: str = "") -> str:
     """Analyzes the active score session or an external MIDI file to detect the musical key and confidence.
 
     Args:
         tool_context: The tool execution context containing session data.
-        midi_path: Optional local path or indicator for a MIDI file to analyze instead of the active score. If there is a MIDI file attached to the chat, that file will be used when a path is not found on disk.
+        midi_path: Optional local path to a MIDI file to detect key signature.
+        file_content_base64: Optional base64-encoded content of the MIDI file.
 
     Returns:
         A JSON string containing the status, detected key, confidence score, and alternative keys.
     """
+    import base64
     script_path = _PROJECT_ROOT / "skills" / "music_theory_query" / "scripts" / "detect_key.py"
     session_id = tool_context.session.id
 
-    # Security: resolve and validate the path stays inside the project root
     resolved_path = ""
-    safe = _safe_resolve_path(midi_path) if midi_path else None
-    if safe and Path(safe).is_file():
-        resolved_path = safe
+    if file_content_base64:
+        try:
+            content = base64.b64decode(file_content_base64)
+            assets_dir = _PROJECT_ROOT / "skills" / "music_theory_query" / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            uploaded_path = assets_dir / f"uploaded_{session_id}.mid"
+            uploaded_path.write_bytes(content)
+            resolved_path = str(uploaded_path.resolve())
+        except Exception as e:
+            return json.dumps({"status": "error", "error": f"Failed to decode base64 MIDI content: {e}"})
     else:
-        attachment_path = await get_attached_midi_file(tool_context)
-        if attachment_path:
-            resolved_path = attachment_path
-        elif midi_path:
-            resolved_path = midi_path
+        # Security: resolve and validate the path stays inside allowed directories
+        safe = _safe_resolve_path(midi_path) if midi_path else None
+        if safe and Path(safe).is_file():
+            resolved_path = safe
+        else:
+            attachment_path = await get_attached_midi_file(tool_context)
+            if attachment_path:
+                resolved_path = attachment_path
+            elif midi_path:
+                resolved_path = midi_path
 
     python_exe = sys.executable or "python"
     cmd = [python_exe, str(script_path)]
