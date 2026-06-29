@@ -1,78 +1,271 @@
-# Symbolic Music Assistant
+# 🎵 Symbolic Music Assistant
 
-An AI-powered co-pilot for symbolic music processing—helping you compose scores, analyze MIDI, solve music theory queries, and synthesize acoustic audio through simple conversation. Built using the [Agent Development Kit (ADK)](https://adk.dev/), `music21`, `pretty_midi`, and `FluidSynth`.
+> **Kaggle Capstone — Agents for Good track**  
+> "AI Agents: Intensive Vibe Coding Course" with Google x Kaggle
+
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/) [![google-adk](https://img.shields.io/badge/ADK-2.3%2B-orange)](https://adk.dev/) [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
+
+**Quick links:** [📺 Demo Video (YouTube)](#-todo) · [🌐 Live Demo](#-todo) · [💻 GitHub](https://github.com/esoltys/symbolic-music-assistant)
 
 ![Agent Playground Screenshot](examples/adk_screenshot_01.png)
 
 ---
 
+## 🎯 The Problem
+
+Music education has a fundamental accessibility gap. Learning music theory—intervals, scales, chords, voice-leading—has traditionally required either expensive lessons or wrestling with technical software like Sibelius or MuseScore that assumes significant prior knowledge. Students and hobbyist composers face the same friction repeatedly:
+
+- **Feedback is slow.** Writing a melody and checking it for voice-leading errors means manually cross-referencing rules you half-remember.
+- **Tools are siloed.** You analyze theory in one app, compose in another, synthesize audio in a third—with no shared context between them.
+- **The gap between an idea and hearing it is wide.** Converting a harmonic idea to an audible result requires MIDI editors, soundfonts, and DAW setup.
+
+AI agents are uniquely positioned to solve this because music tasks are inherently **multi-step and stateful**: building a score, transposing it, checking voice-leading, visualizing it, and synthesizing audio are steps in a single creative session—not independent queries. A conversational agent can hold that context and orchestrate all the tools as one coherent workflow.
+
+---
+
+## 💡 The Solution
+
+The **Symbolic Music Assistant** is a conversational AI agent that acts as an intelligent music co-pilot. Through natural language, it lets you:
+
+- Build multi-part musical scores note by note, or import existing MIDI files
+- Ask theory questions and get instant, accurate answers
+- Visualize your score as a piano roll or export MusicXML for MuseScore
+- Hear your composition as a synthesized WAV in seconds
+
+**Why agents?** Because the tasks are multi-step and contextual. When a user says _"build a 4/4 score in G Major, add a melody, check it for voice-leading errors, then synthesize it as audio"_, they are describing a **pipeline of 4–5 tool calls** that must share session state. An agent with working memory and tool-use is the natural fit—no static pipeline could handle the open-ended variations a human conversation produces.
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    U(["👤 User"])
+    PG["ADK Playground / Web UI"]
+    A["🤖 Root Agent\nmusic_assistant_root\nGemini 2.5 Flash"]
+    S["🗂️ Session State\nin-memory per session"]
+    MCP["🔌 MCP Server\nmcp_server.py\nstdio transport"]
+
+    subgraph Tools ["17 Registered Tools"]
+        T1["🎼 Score Construction\ninitialize · add_note · transpose\nexport_midi · import_midi\nset_tempo · assign_instrument\nvalidate_voice_leading"]
+        T2["🎵 Music Theory\nevaluate_interval · list_scale_pitches\nanalyze_chord · detect_key"]
+        T3["📊 MIDI Analytics\nanalyze_midi_file"]
+        T4["🖼️ Visual Notation\nrender_notation"]
+        T5["🔊 Audio Synthesis\nsynthesize_score · list_soundfonts\nlist_soundfont_instruments"]
+    end
+
+    subgraph Skills ["5 Skill Scripts (subprocess)"]
+        SK1["score_construction/"]
+        SK2["music_theory_query/"]
+        SK3["midi_analytics/"]
+        SK4["visual_notation_rendering/"]
+        SK5["acoustic_audio_synthesis/"]
+    end
+
+    subgraph Libs ["Libraries"]
+        L1["music21"]
+        L2["pretty_midi"]
+        L3["matplotlib"]
+        L4["tinysoundfont"]
+    end
+
+    U -->|"natural language"| PG
+    PG --> A
+    A <--> S
+    A --> Tools
+    T1 --> SK1
+    T2 --> SK2
+    T3 --> SK3
+    T4 --> SK4
+    T5 --> SK5
+    SK1 & SK2 --> L1
+    SK3 --> L2
+    SK4 --> L1 & L3
+    SK5 --> L4
+
+    MCP -->|"exposes evaluate_interval\nlist_scale_pitches · analyze_chord"| T2
+```
+
+### Technology Stack
+
+| Layer | Technology |
+|---|---|
+| **Agent Framework** | [Google Agent Development Kit (ADK)](https://adk.dev/) v2.3+ |
+| **LLM** | Gemini 2.5 Flash (via `google-adk`) |
+| **Music Engine & Score Export** | [music21](https://web.mit.edu/music21/) v9.1+ — music analysis, composition, and MusicXML export |
+| **MIDI Processing** | [pretty_midi](https://craffel.github.io/pretty-midi/) v0.2+ |
+| **Audio Synthesis** | [tinysoundfont](https://github.com/nwhitehead/tinysoundfont) + General MIDI soundfonts |
+| **Visualization** | [matplotlib](https://matplotlib.org/) v3.8+ — piano rolls and score timeline plots |
+| **MCP Server** | [FastMCP](https://github.com/jlowin/fastmcp) (stdio transport) |
+| **Web API** | FastAPI via `google.adk.cli.fast_api` |
+| **Observability** | OpenTelemetry → Cloud Trace + Cloud Logging |
+| **Container** | Docker (Python 3.12 slim) |
+| **Deploy** | Google Cloud Run via `agents-cli deploy` |
+
+---
+
+## ✅ Key Concepts Demonstrated
+
+The following concepts from the "AI Agents: Intensive Vibe Coding Course" are demonstrated in this project:
+
+| Concept | Status | Where |
+|---|---|---|
+| **Agent / Multi-agent system (ADK)** | ✅ | [`agents/music_assistant/agent.py`](agents/music_assistant/agent.py) — `root_agent = Agent(...)` with 17 registered tools |
+| **Agent Skills (agents-cli)** | ✅ | 5 skill directories under `skills/`, `agents-cli-manifest.yaml`, full `eval/playground/deploy` workflow |
+| **MCP Server** | ✅ | [`mcp_server.py`](mcp_server.py) — exposes 3 music theory tools via stdio MCP for external clients |
+| **Security features** | ✅ | Path traversal guard (`_safe_resolve_path`), input length caps (`_sanitize_arg`), CORS control, session isolation, privacy-preserving telemetry |
+| **Deployability** | ✅ | `Dockerfile`, Cloud Run deployment via `agents-cli deploy`, Terraform scaffold available |
+| **Antigravity** | ✅ | Used throughout development — see [`GEMINI.md`](GEMINI.md) and video demo |
+
+---
+
+## 🔒 Security
+
+Security is designed in at multiple layers:
+
+| Feature | Implementation |
+|---|---|
+| **No secrets in code** | All credentials via environment variables; `.gitignore` excludes `.env`, `*.db`, all session artifacts |
+| **Path traversal prevention** | `_safe_resolve_path()` in [`agent.py`](agents/music_assistant/agent.py) resolves any LLM-supplied file path and asserts it stays within the project root |
+| **Input length caps** | `_sanitize_arg()` truncates all string subprocess arguments to 256 chars, preventing oversized inputs |
+| **No shell injection** | All subprocess calls use list argv (`shell=False`); no user-supplied strings are concatenated into shell commands |
+| **Soundfont directory restriction** | `synthesize_score` strips all directory components from user-supplied soundfont names via `Path(name).name`, ensuring only files inside `soundfonts/` can be loaded |
+| **Session isolation** | `session_service_uri=None` (in-memory sessions); no cross-session data persistence |
+| **Privacy-preserving telemetry** | `telemetry.py` hard-codes `NO_CONTENT` mode — metadata only, no prompt/response content is ever logged |
+| **CORS control** | `ALLOW_ORIGINS` configured via environment variable; defaults to locked-down if unset |
+
+---
+
+## 🖼️ Gallery
+
+> [!IMPORTANT]
+> **TODO:** Replace with high-quality screenshots before submission.
+> Capture and add:
+> - `examples/screenshot_playground_session.png` — a full ADK playground conversation showing score building + theory query in one session
+> - `examples/screenshot_piano_roll.png` — a rendered piano roll of a multi-part score with clear labels
+> - `examples/screenshot_musicxml.png` — the MusicXML output open in MuseScore
+> - `examples/screenshot_audio_wave.png` — the synthesized WAV loaded in an audio viewer
+> - `examples/diagram_architecture.png` — an exported version of the Mermaid architecture diagram above
+
+---
+
 ## 🎵 What Can the Assistant Do? (User Guide)
 
-The assistant is equipped with specialized **Skills** to assist you with various music tasks. Below is a summary of its capabilities and examples of questions or prompts you can ask:
+The assistant gives you an **interactive music education and composition environment** through plain conversation. All five skill areas share a live session state — notes you build in one step are immediately available to transpose, visualize, validate, or synthesize in the next.
 
-### 1. Score Construction & Melodic Composition (`building-symbolic-scores`)
-Build, edit, and convert musical scores. The assistant keeps track of your active session's score state (keys, time signatures, notes, rests, and chords).
-* **Capabilities**:
-  * Initialize new scores with specific time and key signatures.
-  * Append single notes, chords, or rests (specifying pitch, duration, and track/part).
-  * Build complex multi-part scores (e.g., melody, bassline).
-  * Transpose the active score up or down by any number of semitones.
-  * Export the active score to standard MIDI (`.mid`) files as session artifacts.
-  * Import external MIDI files directly into the active score state for rendering or synthesis.
-  * Validate the active score for voice-leading violations (parallel fifths/octaves) and vocal range errors.
-* **Example Questions & Prompts**:
-  * *"Initialize a blank 4/4 score in G Major."*
-  * *"Add a quarter note C4 to the melody."*
-  * *"Transpose the active score up 2 semitones."*
-  * *"Export the score to a MIDI file."*
-  * *"Import the MIDI file at skills/midi_analytics/assets/sample.mid"*
-  * *"Check the active score for voice-leading errors."*
+### End-to-End Workflow Example
 
-### 2. Music Theory Queries (`querying-music-theory`)
-Perform quick and accurate symbolic music theory calculations.
-* **Capabilities**:
-  * Calculate interval distances and interval names between pitches.
-  * Spell scales and modes (e.g., Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian).
-  * Identify chords, inversions, and triad status from notes.
-  * Perform Roman numeral analysis of chords in a given key signature.
-  * Detect/estimate the key signature of the active score or an external MIDI file.
-* **Example Questions & Prompts**:
-  * *"What is the interval between C4 and G#4?"*
-  * *"What are the notes in D Dorian?"*
-  * *"What chord is C4, E-4, G4, B-4?"*
-  * *"What is the Roman numeral of C4, E4, G4 in G Major?"*
-  * *"What key is this MIDI file in?"*
+Here is a complete session a music student or composer might have:
 
-### 3. MIDI File Analytics (`analyzing-midi-files`)
-Ingest and analyze existing MIDI files to extract structural metrics.
-* **Capabilities**:
-  * Count tracks, total note events, and list detailed track/instrument programs and names.
-  * Extract global tempo (BPM) and time signatures.
-* **Example Questions & Prompts**:
-  * *"Analyze this MIDI file: path/to/song.mid"*
-  * *"What is the tempo of the midi at path/to/track.mid?"*
-  * *"How many notes and tracks are in the MIDI file at path/to/composition.mid?"*
-  * *"What instruments are in the MIDI file at path/to/song.mid?"*
+```
+You:       "Initialize a 3/4 waltz in A Minor."
+Agent:     Score initialized — 3/4, A Minor, 0 parts.
 
-### 4. Visual Notation Rendering (`rendering-visual-notation`)
-Generate visual representations of your active score.
-* **Capabilities**:
-  * Render piano rolls and timeline notation graphs using `matplotlib`.
-  * Export high-fidelity MusicXML files ready for inspection in external score editors like MuseScore.
-* **Example Questions & Prompts**:
-  * *"Show a visualization of the current score."*
-  * *"Render the active score to an image."*
-  * *"Graph the current notes."*
+You:       "Add these melody notes: A4 quarter, C5 quarter, E5 half."
+Agent:     Added 3 notes to the 'melody' part (measure 1).
 
-### 5. Acoustic Audio Synthesis (`synthesizing-acoustic-audio`)
-Hear your creations by compiling note sequences into audio.
-* **Capabilities**:
-  * Synthesize note events from your active score into concrete WAV files on disk.
-  * Uses FluidSynth with high-quality acoustic grand piano sound fonts.
-* **Example Questions & Prompts**:
-  * *"Synthesize the current score to audio."*
-  * *"Convert the active score notes into a piano wav file."*
-  * *"Render the score as audio."*
+You:       "What chord do A4, C5, and E5 form?"
+Agent:     A Minor triad (root position). Roman numeral: i in A Minor.
+
+You:       "Check the score for voice-leading errors."
+Agent:     No parallel fifths or octaves detected. Vocal ranges OK.
+
+You:       "Render a piano roll of the melody."
+Agent:     [displays piano roll image]
+
+You:       "Transpose the score up a perfect fifth and synthesize it."
+Agent:     Transposed +7 semitones → E Minor. Synthesizing… [score.wav ready]
+```
+
+All of this happens in a single conversation with no file management, no software switching, and no music theory lookup required.
+
+---
+
+### Skill 1 — Score Construction & Composition
+
+Build, edit, and export musical scores. The agent maintains your **active score state** across the entire session.
+
+| Capability | Example prompt |
+|---|---|
+| Initialize a score | *"Create a blank 4/4 score in G Major."* |
+| Add notes, chords, rests | *"Add a dotted quarter C4, then an eighth rest to the melody."* |
+| Build multi-part scores | *"Add a bassline part and put a whole note G2 on measure 1."* |
+| Set tempo | *"Set the tempo to 120 BPM."* |
+| Assign instruments | *"Assign the bassline part to Acoustic Bass (program 32)."* |
+| Transpose | *"Transpose the score up a minor third."* |
+| Validate voice-leading | *"Check for parallel fifths and octaves."* |
+| Export MIDI | *"Export the score as a MIDI file."* |
+| Import MIDI | *"Import the attached MIDI file into the active score."* |
+
+### Skill 2 — Music Theory Queries
+
+Get instant, accurate answers to theory questions — the kind that used to require a textbook or a teacher.
+
+| Capability | Example prompt |
+|---|---|
+| Interval calculation | *"What is the interval between C4 and G#4?"* |
+| Scale spelling | *"List the notes in D Dorian."* |
+| Scale modes | *"What notes are in F# Phrygian?"* |
+| Chord identification | *"What chord is C4, E♭4, G4, B♭4?"* |
+| Roman numeral analysis | *"What is the Roman numeral for C4, E4, G4 in G Major?"* |
+
+### Skill 3 — MIDI File Analytics
+
+Drop any MIDI file into the chat and instantly understand its structure.
+
+| Capability | Example prompt |
+|---|---|
+| Track & note summary | *"Analyze this MIDI: how many tracks and notes does it have?"* |
+| Tempo & time signature | *"What is the tempo and time signature of this MIDI?"* |
+| Instrument listing | *"What instruments are used in this file?"* |
+| Key detection | *"What key does this MIDI seem to be in?"* |
+
+### Skill 4 — Visual Notation Rendering
+
+Turn your active score into visual artifacts for learning, sharing, or further editing.
+
+| Output | Example prompt |
+|---|---|
+| Piano roll image | *"Show me a piano roll of the current score."* |
+| Score timeline plot | *"Render the active score as a timeline graph."* |
+| MusicXML export | *"Export the score as MusicXML for MuseScore."* |
+| Filtered render | *"Render only the melody and bassline tracks."* |
+
+### Skill 5 — Acoustic Audio Synthesis
+
+Hear what you've built, without opening a DAW.
+
+| Capability | Example prompt |
+|---|---|
+| Full score to WAV | *"Synthesize the current score to audio."* |
+| Single track | *"Play just the melody track."* |
+| Choose soundfont | *"Synthesize using the Salamander Grand Piano soundfont."* or *"Use the General MIDI soundfont."* |
+| Browse soundfonts | *"What soundfonts are available?"* |
+| Browse instruments | *"What instruments does the General MIDI soundfont include?"* |
+
+### Complete Tool Inventory
+
+The agent has 17 registered tools across the 5 skill areas:
+
+| Tool | Skill Area |
+|---|---|
+| `initialize_score` | Score Construction |
+| `add_note_to_score` | Score Construction |
+| `transpose_score` | Score Construction |
+| `set_score_tempo` | Score Construction |
+| `assign_instrument_to_track` | Score Construction |
+| `validate_voice_leading` | Score Construction |
+| `export_score_to_midi` | Score Construction |
+| `import_midi_to_score` | Score Construction |
+| `evaluate_interval` | Music Theory |
+| `list_scale_pitches` | Music Theory |
+| `analyze_chord` | Music Theory |
+| `detect_key` | Music Theory |
+| `analyze_midi_file` | MIDI Analytics |
+| `render_notation` | Visual Notation |
+| `synthesize_score` | Audio Synthesis |
+| `list_soundfonts` | Audio Synthesis |
+| `list_soundfont_instruments` | Audio Synthesis |
 
 ---
 
@@ -82,29 +275,35 @@ Hear your creations by compiling note sequences into audio.
 
 ```
 symbolic-music-assistant/
-├── app/         # FastAPI application and telemetry wrappers
-│   └── app_utils/             # App utilities and helpers
-├── agents/      # ADK agent package
-│   ├── agent.py               # Wrapper to expose music assistant agent
-│   └── music_assistant/       # Core music assistant agent and tools
-├── skills/      # Custom music skills (theory, score, midi, render, synth)
-├── tests/                     # Unit and integration tests
-├── GEMINI.md                  # AI-assisted development guide
-└── pyproject.toml             # Project dependencies
+├── app/                           # FastAPI application and telemetry wrappers
+│   └── app_utils/                 # Telemetry and typing helpers
+├── agents/                        # ADK agent package
+│   ├── agent.py                   # Wrapper to expose music assistant agent
+│   └── music_assistant/           # Core agent: 17 tools + security helpers
+├── skills/                        # 5 custom skill script directories
+│   ├── score_construction/        # Score build, edit, export, validate
+│   ├── music_theory_query/        # Intervals, scales, chords, key detection
+│   ├── midi_analytics/            # MIDI file parsing
+│   ├── visual_notation_rendering/ # Piano roll + MusicXML generation
+│   └── acoustic_audio_synthesis/  # WAV synthesis via tinysoundfont
+├── mcp_server.py                  # MCP server (music theory tools, stdio)
+├── tests/                         # Unit and integration tests
+├── specs/                         # BDD feature specs + test implementations
+├── Dockerfile                     # Container for Cloud Run deployment
+├── GEMINI.md                      # AI-assisted development guide (Antigravity)
+└── pyproject.toml                 # Project dependencies
 ```
 
-> 💡 **Tip:** Use [Google Antigravity](https://antigravity.google/) for AI-assisted development - project context is pre-configured in [GEMINI.md](GEMINI.md).
+> 💡 **Tip:** Use [Google Antigravity](https://antigravity.google/) for AI-assisted development — project context is pre-configured in [GEMINI.md](GEMINI.md).
 
 ### Requirements
 
 Before you begin, ensure you have:
-- **uv**: Python package manager (used for all dependency management in this project) - [Install](https://docs.astral.sh/uv/getting-started/installation/) ([add packages](https://docs.astral.sh/uv/concepts/dependencies/) with `uv add <package>`)
-- **agents-cli**: Agents CLI - Install with `uv tool install google-agents-cli`
-- **Google Cloud SDK**: For GCP services - [Install](https://cloud.google.com/sdk/docs/install)
+- **uv**: Python package manager — [Install](https://docs.astral.sh/uv/getting-started/installation/)
+- **agents-cli**: Install with `uv tool install google-agents-cli`
+- **Google Cloud SDK**: For GCP services — [Install](https://cloud.google.com/sdk/docs/install)
 
 ### Quick Start
-
-Install `agents-cli` and its skills if not already installed:
 
 ```bash
 uvx google-agents-cli setup
@@ -112,17 +311,26 @@ agents-cli install
 agents-cli playground
 ```
 
-You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`.
+You can also use the [ADK](https://adk.dev/) CLI directly with `uv run adk`.
 
 ### Commands
 
-| Command              | Description                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `agents-cli install` | Install dependencies using uv                                                         |
-| `agents-cli playground` | Launch local development environment                                                  |
-| `agents-cli lint`    | Run code quality checks                                                               |
-| `agents-cli eval`    | Evaluate agent behavior (generate, grade, analyze, and more — see `agents-cli eval --help`) |
-| `uv run pytest tests/unit tests/integration` | Run unit and integration tests                                                        |
+| Command | Description |
+| --- | --- |
+| `agents-cli install` | Install dependencies using uv |
+| `agents-cli playground` | Launch local development environment |
+| `agents-cli lint` | Run code quality checks |
+| `agents-cli eval` | Evaluate agent behavior (generate, grade, analyze — see `agents-cli eval --help`) |
+| `uv run pytest tests/unit tests/integration` | Run unit and integration tests |
+
+### MCP Server
+
+The project includes an MCP server (`mcp_server.py`) that exposes the three stateless music theory tools over the stdio transport. This allows external MCP clients—such as Claude Desktop or other ADK agents—to call the music theory engine without running the full assistant.
+
+**Run the server:**
+```bash
+uv run python mcp_server.py
+```
 
 ### 🛠️ Project Management
 
@@ -134,18 +342,47 @@ You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`
 
 ### Development
 
-Edit your agent logic in `agents/music_assistant/agent.py` and test with `agents-cli playground` - it auto-reloads on save.
+Edit your agent logic in `agents/music_assistant/agent.py` and test with `agents-cli playground` — it auto-reloads on save.
 
 ### Deployment
+
+This project is fully containerized and deploys to **Google Cloud Run** via `agents-cli deploy`.
 
 ```bash
 gcloud config set project <your-project-id>
 agents-cli deploy
 ```
 
-To add CI/CD and Terraform, run `agents-cli scaffold enhance`.
-To set up your production infrastructure, run `agents-cli infra cicd`.
+#### Cloud Run Cost Controls
+
+Cloud Run charges only for active request processing time — with zero traffic, the cost is effectively $0. Recommended settings to prevent runaway costs:
+
+| Setting | Recommended Value | How to Set |
+|---|---|---|
+| **Max instances** | `3` | `--max-instances=3` in deploy cmd or Cloud Console |
+| **Min instances** | `0` | Default; allows scale-to-zero when idle |
+| **Memory** | `512Mi–1Gi` | `--memory=512Mi` |
+| **CPU** | `1` | `--cpu=1` |
+| **Request timeout** | `60s` | `--timeout=60` |
+| **Concurrency** | `10` | `--concurrency=10` |
+
+With these limits and a pre-pay billing cap in place, costs for judging-level traffic (a few dozen requests) will be well under $1.
+
+To add CI/CD and Terraform: `agents-cli scaffold enhance`  
+To set up production infrastructure: `agents-cli infra cicd`
 
 ### Observability
 
-Built-in telemetry exports to Cloud Trace, BigQuery, and Cloud Logging.
+Built-in telemetry exports to Cloud Trace, BigQuery, and Cloud Logging. Prompt/response content is **never logged** — only metadata (latency, token counts) is captured.
+
+---
+
+## 📋 TODO
+
+> [!IMPORTANT]
+> The following items are outstanding and required for the final Kaggle submission:
+
+- [ ] **🎬 YouTube Demo Video** (≤ 5 min, required for submission)
+  - Record walkthrough: problem statement → architecture → live demo → build process
+  - Upload to YouTube (public or unlisted) and update the link at the top of this README
+- [ ] **🌐 Live Demo URL** — run `agents-cli deploy` and update the link at the top of this README
