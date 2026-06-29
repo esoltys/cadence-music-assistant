@@ -8,6 +8,56 @@ from google.adk.models import Gemini
 from google.genai import types
 from google.adk.tools import ToolContext
 
+# ---------------------------------------------------------------------------
+# Security helpers
+# ---------------------------------------------------------------------------
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
+
+# Maximum character length for short string arguments passed to subprocesses
+_MAX_ARG_LEN = 256
+
+
+def _safe_resolve_path(user_path: str) -> str | None:
+    """Resolve a user-supplied file path and verify it lies inside the project root.
+
+    Prevents directory traversal attacks where an LLM or user could supply a
+    crafted path like '../../etc/passwd' to read arbitrary files on the host.
+
+    Args:
+        user_path: The raw path string provided by the LLM or user.
+
+    Returns:
+        The resolved absolute path string if it is safe, or None if the
+        resolved path escapes the project root.
+    """
+    if not user_path:
+        return None
+    try:
+        resolved = Path(user_path).resolve()
+        # Ensure the resolved path is inside the project root
+        resolved.relative_to(_PROJECT_ROOT)
+        return str(resolved)
+    except (ValueError, OSError):
+        # ValueError: path escapes root. OSError: invalid path on this OS.
+        return None
+
+
+def _sanitize_arg(value: str, max_len: int = _MAX_ARG_LEN) -> str:
+    """Truncate a string argument to a safe maximum length before passing to a subprocess.
+
+    Note: inputs are passed as argv items (no shell=True), so shell injection is
+    not a direct risk, but capping length guards against denial-of-service via
+    oversized inputs and keeps error messages intelligible.
+
+    Args:
+        value: The string value to sanitize.
+        max_len: Maximum allowed character length (default 256).
+
+    Returns:
+        The original string if within bounds, otherwise truncated to max_len.
+    """
+    return value[:max_len]
+
 def evaluate_interval(start_note: str, end_note: str) -> str:
     """Calculates the semitone distance and canonical interval name between two note pitches.
 
@@ -18,9 +68,10 @@ def evaluate_interval(start_note: str, end_note: str) -> str:
     Returns:
         A JSON string containing the status, calculated semitones, interval name, or error details.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "music_theory_query" / "scripts" / "evaluate_intervals.py"
-    
+    script_path = _PROJECT_ROOT / "skills" / "music_theory_query" / "scripts" / "evaluate_intervals.py"
+    start_note = _sanitize_arg(start_note)
+    end_note = _sanitize_arg(end_note)
+
     python_exe = sys.executable or "python"
     try:
         result = subprocess.run(
@@ -44,9 +95,10 @@ def list_scale_pitches(tonic: str, scale_type: str) -> str:
     Returns:
         A JSON string containing the status, tonic, scale type, and list of pitches.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "music_theory_query" / "scripts" / "list_scale_pitches.py"
-    
+    script_path = _PROJECT_ROOT / "skills" / "music_theory_query" / "scripts" / "list_scale_pitches.py"
+    tonic = _sanitize_arg(tonic)
+    scale_type = _sanitize_arg(scale_type)
+
     python_exe = sys.executable or "python"
     try:
         result = subprocess.run(
@@ -70,9 +122,10 @@ def analyze_chord(pitches: str, key_signature: str = "") -> str:
     Returns:
         A JSON string containing the status, pitches, chord name, inversion, triad status, and Roman numeral.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "music_theory_query" / "scripts" / "analyze_chord.py"
-    
+    script_path = _PROJECT_ROOT / "skills" / "music_theory_query" / "scripts" / "analyze_chord.py"
+    pitches = _sanitize_arg(pitches)
+    key_signature = _sanitize_arg(key_signature)
+
     python_exe = sys.executable or "python"
     cmd = [python_exe, str(script_path), pitches]
     if key_signature:
@@ -101,8 +154,9 @@ def initialize_score(tool_context: ToolContext, time_signature: str = "4/4", key
     Returns:
         A JSON string containing the status, time_signature, key_signature, and parts_count.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    time_signature = _sanitize_arg(time_signature)
+    key_signature = _sanitize_arg(key_signature)
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -130,8 +184,10 @@ def add_note_to_score(tool_context: ToolContext, pitch: str, duration: str, part
     Returns:
         A JSON string containing the status, added event details, and measure number.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    pitch = _sanitize_arg(pitch)
+    duration = _sanitize_arg(duration)
+    part_id = _sanitize_arg(part_id)
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -157,8 +213,7 @@ def transpose_score(tool_context: ToolContext, semitones: int) -> str:
     Returns:
         A JSON string containing the status, transposition details, and new key signature.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -183,8 +238,7 @@ async def export_score_to_midi(tool_context: ToolContext) -> str:
     Returns:
         A JSON string containing the status, midi_path of the generated file, or error details.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -198,7 +252,7 @@ async def export_score_to_midi(tool_context: ToolContext) -> str:
         
         # Load and save MIDI artifact if successful
         if result.returncode == 0:
-            assets_dir = project_root / "skills" / "score_construction" / "assets"
+            assets_dir = _PROJECT_ROOT / "skills" / "score_construction" / "assets"
             midi_path = assets_dir / f"score_{session_id}.mid"
             if midi_path.is_file():
                 with open(midi_path, "rb") as f:
@@ -366,13 +420,14 @@ async def import_midi_to_score(tool_context: ToolContext, midi_path: str = "") -
     Returns:
         A JSON string containing the status, imported time/key signature, and part count.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
     session_id = tool_context.session.id
-    
+
+    # Security: resolve and validate the path stays inside the project root
     resolved_path = ""
-    if midi_path and Path(midi_path).is_file():
-        resolved_path = midi_path
+    safe = _safe_resolve_path(midi_path) if midi_path else None
+    if safe and Path(safe).is_file():
+        resolved_path = safe
     else:
         attachment_path = await get_attached_midi_file(tool_context)
         if attachment_path:
@@ -406,12 +461,13 @@ async def analyze_midi_file(tool_context: ToolContext, file_path: str = "") -> s
     Returns:
         A JSON string containing the status, track_count, tempo, note_count, list of instruments (names, programs, note counts), or error details.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "midi_analytics" / "scripts" / "parse_midi_metrics.py"
-    
+    script_path = _PROJECT_ROOT / "skills" / "midi_analytics" / "scripts" / "parse_midi_metrics.py"
+
+    # Security: resolve and validate the path stays inside the project root
     resolved_path = ""
-    if file_path and Path(file_path).is_file():
-        resolved_path = file_path
+    safe = _safe_resolve_path(file_path) if file_path else None
+    if safe and Path(safe).is_file():
+        resolved_path = safe
     else:
         attachment_path = await get_attached_midi_file(tool_context)
         if attachment_path:
@@ -445,13 +501,14 @@ async def detect_key(tool_context: ToolContext, midi_path: str = "") -> str:
     Returns:
         A JSON string containing the status, detected key, confidence score, and alternative keys.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "music_theory_query" / "scripts" / "detect_key.py"
+    script_path = _PROJECT_ROOT / "skills" / "music_theory_query" / "scripts" / "detect_key.py"
     session_id = tool_context.session.id
-    
+
+    # Security: resolve and validate the path stays inside the project root
     resolved_path = ""
-    if midi_path and Path(midi_path).is_file():
-        resolved_path = midi_path
+    safe = _safe_resolve_path(midi_path) if midi_path else None
+    if safe and Path(safe).is_file():
+        resolved_path = safe
     else:
         attachment_path = await get_attached_midi_file(tool_context)
         if attachment_path:
@@ -487,8 +544,7 @@ def validate_voice_leading(tool_context: ToolContext) -> str:
     Returns:
         A JSON string containing the status, violation status, and detailed list of parallel fifths, octaves, or range violations.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "check_voice_leading.py"
+    script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "check_voice_leading.py"
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -514,8 +570,8 @@ async def render_notation(tool_context: ToolContext, tracks: str = "") -> str:
     Returns:
         A JSON string containing the status, piano_roll image path, notation_layout image path, score_plot image path, or error details.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "visual_notation_rendering" / "scripts" / "generate_visuals.py"
+    script_path = _PROJECT_ROOT / "skills" / "visual_notation_rendering" / "scripts" / "generate_visuals.py"
+    tracks = _sanitize_arg(tracks)
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -533,7 +589,7 @@ async def render_notation(tool_context: ToolContext, tracks: str = "") -> str:
         
         # Load and save artifacts
         if result.returncode == 0:
-            assets_dir = project_root / "skills" / "visual_notation_rendering" / "assets"
+            assets_dir = _PROJECT_ROOT / "skills" / "visual_notation_rendering" / "assets"
             piano_roll_path = assets_dir / f"piano_roll_{session_id}.png"
             score_plot_path = assets_dir / f"score_plot_{session_id}.png"
             musicxml_path = assets_dir / f"score_{session_id}.musicxml"
@@ -567,24 +623,28 @@ async def render_notation(tool_context: ToolContext, tracks: str = "") -> str:
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to execute rendering script: {e}"})
 
-async def synthesize_score(tool_context: ToolContext, tracks: str = "") -> str:
+async def synthesize_score(tool_context: ToolContext, tracks: str = "", soundfont: str = "") -> str:
     """Synthesizes the current score state to a piano WAV audio file.
 
     Args:
         tool_context: The tool execution context containing session data.
         tracks: Optional comma-separated list of track IDs, names, or 1-based indices/ranges (e.g. 'piano', '1', '7-8') to play/synthesize. If not specified, all tracks are synthesized.
+        soundfont: Optional soundfont filename to use for synthesis (e.g. 'TimGM6mb.sf2' or 'SalamanderGrandPiano-V3+20200602.sf2'). If not specified, defaults to TimGM6mb.sf2. Use list_soundfonts to see available options.
 
     Returns:
-        A JSON string containing the status, audio_path to the synthesized WAV file, or error details.
+        A JSON string containing the status, audio_path to the synthesized WAV file, soundfont used, or error details.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "acoustic_audio_synthesis" / "scripts" / "synthesize_score.py"
+    script_path = _PROJECT_ROOT / "skills" / "acoustic_audio_synthesis" / "scripts" / "synthesize_score.py"
+    tracks = _sanitize_arg(tracks)
+    soundfont = _sanitize_arg(soundfont)
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
     cmd = [python_exe, str(script_path), "--session-id", session_id]
     if tracks:
         cmd.extend(["--tracks", tracks])
+    if soundfont:
+        cmd.extend(["--soundfont", soundfont])
         
     try:
         result = subprocess.run(
@@ -596,7 +656,7 @@ async def synthesize_score(tool_context: ToolContext, tracks: str = "") -> str:
         
         # Load and save WAV artifact if successful
         if result.returncode == 0:
-            assets_dir = project_root / "skills" / "acoustic_audio_synthesis" / "assets"
+            assets_dir = _PROJECT_ROOT / "skills" / "acoustic_audio_synthesis" / "assets"
             wav_path = assets_dir / f"score_{session_id}.wav"
             if wav_path.is_file():
                 with open(wav_path, "rb") as f:
@@ -622,8 +682,7 @@ def set_score_tempo(tool_context: ToolContext, bpm: float, offset: float = 0.0) 
     Returns:
         A JSON string containing the status and details of the tempo setting.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -859,8 +918,8 @@ def assign_instrument_to_track(tool_context: ToolContext, part_id: str, program:
     Returns:
         A JSON string containing the status and details of the assignment.
     """
-    project_root = Path(__file__).parent.parent.parent.resolve()
-    script_path = project_root / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    script_path = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
+    part_id = _sanitize_arg(part_id)
     session_id = tool_context.session.id
     
     python_exe = sys.executable or "python"
@@ -914,7 +973,8 @@ root_agent = Agent(
         "![Piano Roll](skills/visual_notation_rendering/assets/piano_roll_<session_id>.png) and ![Score Plot](skills/visual_notation_rendering/assets/score_plot_<session_id>.png) (using the actual session ID from the tool response). "
         "Otherwise, if the user only requested sheet music or a MusicXML file, you MUST NOT embed the piano roll images in your response, and you MUST only explicitly notify the user that the high-fidelity MusicXML asset is ready for MuseScore inspection, formatted as a clickable Markdown file link using the file:// scheme and its absolute path, for example: [score_<session_id>.musicxml](file:///C:/Users/ericj/source/symbolic-music-assistant/skills/visual_notation_rendering/assets/score_<session_id>.musicxml).\n"
         "Use the synthesize_score tool to compile the notes from the score state into a WAV audio file. You can optionally filter which tracks are played/synthesized by passing a comma-separated list of track IDs, names, or 1-based indices/ranges (e.g. 'piano', '1', '7-8') to the tracks parameter. "
-        "When synthesizing audio, you MUST return the absolute path of the generated audio asset formatted as a clickable Markdown link using the file:// scheme, for example: [score_<session_id>.wav](file:///C:/Users/ericj/source/symbolic-music-assistant/skills/acoustic_audio_synthesis/assets/score_<session_id>.wav).\n"
+        "You can also pass a soundfont filename to the soundfont parameter to choose which .sf2 soundfont is used for synthesis (e.g. 'TimGM6mb.sf2' for General MIDI, or 'SalamanderGrandPiano-V3+20200602.sf2' for the high-quality grand piano). If the user asks for a specific instrument or soundfont and you are unsure of the exact filename, call list_soundfonts first. "
+        "When synthesizing audio, you MUST return the absolute path of the generated audio asset formatted as a clickable Markdown link using the file:// scheme, for example: [score_<session_id>.wav](file:///C:/Users/ericj/source/symbolic-music-assistant/skills/acoustic_audio_synthesis/assets/score_<session_id>.wav). Also mention which soundfont was used (it is returned in the tool response as 'soundfont').\n"
         "IMPORTANT: If the user requests to 'export' the score without specifying a format, you MUST clarify whether they want a MIDI file (using export_score_to_midi) or visual notation/sheet music (using render_notation)."
     ),
     tools=[
