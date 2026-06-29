@@ -50,6 +50,7 @@ def main():
     parser.add_argument("--score-path", help="Path to the score state JSON file")
     parser.add_argument("--session-id", type=str, required=True, help="Unique ADK runtime session ID")
     parser.add_argument("--tracks", help="Comma-separated track IDs, names, or 1-based indices to play/synthesize")
+    parser.add_argument("--soundfont", help="Soundfont filename (e.g. 'TimGM6mb.sf2' or 'SalamanderGrandPiano-V3+20200602.sf2') from the soundfonts/ directory")
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent.resolve()
@@ -139,17 +140,31 @@ def main():
             dt = beat_offset - tempos[-1]["offset"]
             return accumulated_times[-1] + dt * (60.0 / tempos[-1]["bpm"])
         
-        # Try to synthesize using tinysoundfont if available and a soundfont exists
+        # Resolve soundfont: use --soundfont if provided, otherwise prefer TimGM6mb.sf2,
+        # then fall back to any .sf2 found in the soundfonts/ directory.
         sf2_dir = project_root / "soundfonts"
         sf2_path = None
         if sf2_dir.is_dir():
-            preferred = sf2_dir / "TimGM6mb.sf2"
-            if preferred.is_file():
-                sf2_path = preferred
+            if args.soundfont:
+                # Security: only accept a bare filename (no path separators) so the
+                # resolved file is always inside soundfonts/
+                sf2_name = Path(args.soundfont).name  # strips any directory components
+                candidate = sf2_dir / sf2_name
+                if candidate.is_file():
+                    sf2_path = candidate
+                else:
+                    raise FileNotFoundError(
+                        f"Soundfont '{sf2_name}' not found in soundfonts/ directory. "
+                        f"Run list_soundfonts to see available options."
+                    )
             else:
-                for f in sf2_dir.glob("*.sf2"):
-                    sf2_path = f
-                    break
+                preferred = sf2_dir / "TimGM6mb.sf2"
+                if preferred.is_file():
+                    sf2_path = preferred
+                else:
+                    for f in sf2_dir.glob("*.sf2"):
+                        sf2_path = f
+                        break
 
         use_tinysoundfont = False
         if sf2_path is not None:
@@ -312,7 +327,8 @@ def main():
         rel_path = output_file.relative_to(project_root).as_posix()
         print(json.dumps({
             "status": "success",
-            "audio_path": rel_path
+            "audio_path": rel_path,
+            "soundfont": sf2_path.name if sf2_path else "sine-wave fallback"
         }, indent=2))
         sys.exit(0)
         
