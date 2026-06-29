@@ -355,13 +355,18 @@ Add the following entry to the `mcpServers` block:
         "run",
         "python",
         "mcp_server.py"
-      ]
+      ],
+      "env": {
+        "CADENCE_ALLOWED_PATHS": "<optional-custom-music-directories>"
+      }
     }
   }
 }
 ```
 
 *Replace `<absolute-path-to-cadence-music-assistant>` with the actual absolute path to this project directory on your local machine (using double backslashes `\\` on Windows).*
+
+* **File Access Permissions:** By default, Cadence allows access to files inside the project root, the current working directory, and non-hidden directories inside your user home folder (such as `Downloads` or `Claude`). To grant access to folders outside these locations, define them in the optional `CADENCE_ALLOWED_PATHS` environment variable (separated by semicolons on Windows, or colons on macOS/Linux).
 
 
 ### 🛠️ Project Management

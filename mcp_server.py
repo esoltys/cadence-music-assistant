@@ -6,6 +6,7 @@ server so that external MCP clients (e.g. Claude Desktop, other ADK agents, or
 any MCP-compatible application) can call them directly.
 """
 
+import os
 import sys
 import subprocess
 import json
@@ -34,24 +35,50 @@ _MAX_ARG_LEN = 256
 def _safe_resolve_path(user_path: str) -> str | None:
     """Resolve a user-supplied file path and verify it lies within allowed directories.
 
-    Prevents directory traversal attacks by ensuring files reside in the project root,
-    the Claude Desktop user files directory, or the user's Downloads directory.
+    Allowed directories include:
+    1. The project root and current working directory.
+    2. Any custom directories specified via the CADENCE_ALLOWED_PATHS environment variable.
+    3. The user's home directory (e.g. ~/Downloads, ~/Claude, etc.), excluding hidden 
+       folders (starting with '.') and sensitive system paths.
     """
     if not user_path:
         return None
     try:
         resolved = Path(user_path).resolve()
+        
+        # 1. Check project root and current working directory
         allowed_roots = [
             _PROJECT_ROOT,
-            Path.home() / "Claude",
-            Path.home() / "Downloads",
+            Path.cwd(),
         ]
+        
+        # 2. Check custom paths from environment variable
+        env_paths = os.environ.get("CADENCE_ALLOWED_PATHS", "")
+        if env_paths:
+            sep = ";" if os.name == "nt" else ":"
+            for p in env_paths.split(sep):
+                if p.strip():
+                    allowed_roots.append(Path(p.strip()).resolve())
+                    
+        # Verify if it's relative to any whitelisted roots
         for root in allowed_roots:
             try:
                 resolved.relative_to(root)
                 return str(resolved)
             except ValueError:
                 continue
+                
+        # 3. Check if it's in the user's home directory, blocking hidden files/folders (starting with '.')
+        home = Path.home().resolve()
+        try:
+            resolved.relative_to(home)
+            for part in resolved.parts:
+                if part.startswith(".") and part != "." and part != "..":
+                    return None
+            return str(resolved)
+        except ValueError:
+            pass
+            
         return None
     except OSError:
         return None
