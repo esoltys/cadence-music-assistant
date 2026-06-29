@@ -70,6 +70,21 @@ def _safe_resolve_path(user_path: str) -> str | None:
         return None
 
 
+def _safe_decode_base64(b64_str: str) -> bytes:
+    """Safely decode base64 file content, handling data URL prefixes, stripping invalid formatting, and fixing padding."""
+    import base64
+    # Clean up whitespace and quotes
+    b64_str = b64_str.strip().strip("'\"")
+    # Strip data URL prefix if present (e.g. data:audio/midi;base64,TVRoZ...)
+    if "," in b64_str and ";base64" in b64_str.split(",")[0]:
+        b64_str = b64_str.split(",")[1]
+    # Ensure proper padding
+    missing_padding = len(b64_str) % 4
+    if missing_padding:
+        b64_str += '=' * (4 - missing_padding)
+    return base64.b64decode(b64_str)
+
+
 def _sanitize_arg(value: str, max_len: int = _MAX_ARG_LEN) -> str:
     """Truncate a string argument to a safe maximum length before passing to a subprocess.
 
@@ -463,7 +478,9 @@ async def import_midi_to_score(tool_context: ToolContext, midi_path: str = "", f
     resolved_path = ""
     if file_content_base64:
         try:
-            content = base64.b64decode(file_content_base64)
+            content = _safe_decode_base64(file_content_base64)
+            if not content.startswith(b"MThd"):
+                return json.dumps({"status": "error", "error": "Invalid MIDI file: decoded content does not start with MThd header. Please ensure raw binary MIDI data is base64 encoded."})
             assets_dir = _PROJECT_ROOT / "skills" / "score_construction" / "assets"
             assets_dir.mkdir(parents=True, exist_ok=True)
             uploaded_path = assets_dir / f"uploaded_{session_id}.mid"
@@ -518,7 +535,9 @@ async def analyze_midi_file(tool_context: ToolContext, file_path: str = "", file
     resolved_path = ""
     if file_content_base64:
         try:
-            content = base64.b64decode(file_content_base64)
+            content = _safe_decode_base64(file_content_base64)
+            if not content.startswith(b"MThd"):
+                return json.dumps({"status": "error", "error": "Invalid MIDI file: decoded content does not start with MThd header. Please ensure raw binary MIDI data is base64 encoded."})
             assets_dir = _PROJECT_ROOT / "skills" / "midi_analytics" / "assets"
             assets_dir.mkdir(parents=True, exist_ok=True)
             uploaded_path = assets_dir / f"uploaded_{session_id}.mid"
@@ -573,7 +592,9 @@ async def detect_key(tool_context: ToolContext, midi_path: str = "", file_conten
     resolved_path = ""
     if file_content_base64:
         try:
-            content = base64.b64decode(file_content_base64)
+            content = _safe_decode_base64(file_content_base64)
+            if not content.startswith(b"MThd"):
+                return json.dumps({"status": "error", "error": "Invalid MIDI file: decoded content does not start with MThd header. Please ensure raw binary MIDI data is base64 encoded."})
             assets_dir = _PROJECT_ROOT / "skills" / "music_theory_query" / "assets"
             assets_dir.mkdir(parents=True, exist_ok=True)
             uploaded_path = assets_dir / f"uploaded_{session_id}.mid"
