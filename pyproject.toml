@@ -13,6 +13,7 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.42.1",
     "opentelemetry-exporter-gcp-logging>=1.12.0a0",
     "tinysoundfont>=0.3.7",
+    "mcp[cli]>=1.28.1",
 ]
 
 [project.optional-dependencies]
