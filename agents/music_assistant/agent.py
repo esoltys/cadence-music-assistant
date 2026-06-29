@@ -299,26 +299,41 @@ async def get_attached_midi_file(tool_context: ToolContext) -> str | None:
     def extract_from_part(part) -> bytes | None:
         if not part:
             return None
+        
+        # 1. Check inline data
         inline_data = get_field(part, "inline_data")
         if inline_data:
-            mime = (get_field(inline_data, "mime_type") or "").lower()
             data = get_field(inline_data, "data")
-            midi_mime_types = {"audio/midi", "audio/mid", "audio/x-midi", "audio/sp-midi"}
-            if mime in midi_mime_types or (data and data.startswith(b"MThd")):
-                return data
-                
+            if data:
+                if isinstance(data, str):
+                    try:
+                        decoded = _safe_decode_base64(data)
+                        if decoded.startswith(b"MThd"):
+                            return decoded
+                    except Exception:
+                        pass
+                elif isinstance(data, bytes) and data.startswith(b"MThd"):
+                    return data
+                    
+        # 2. Check uploaded file URIs
         file_data = get_field(part, "file_data")
         if file_data:
             mime = (get_field(file_data, "mime_type") or "").lower()
             file_uri = get_field(file_data, "file_uri")
             midi_mime_types = {"audio/midi", "audio/mid", "audio/x-midi", "audio/sp-midi"}
-            if mime in midi_mime_types or "octet-stream" in mime:
+            if not mime or mime in midi_mime_types or "octet-stream" in mime or "midi" in mime:
                 try:
                     from google.genai import Client
                     client = Client()
-                    data = client.files.download(file=file_uri)
-                    if data:
-                        return data
+                    raw_data = client.files.download(file=file_uri)
+                    if raw_data:
+                        if isinstance(raw_data, str):
+                            try:
+                                raw_data = _safe_decode_base64(raw_data)
+                            except Exception:
+                                pass
+                        if isinstance(raw_data, bytes) and raw_data.startswith(b"MThd"):
+                            return raw_data
                 except Exception as e:
                     print(f"Failed to download attached file from file_uri: {e}")
         return None
@@ -334,25 +349,6 @@ async def get_attached_midi_file(tool_context: ToolContext) -> str | None:
             data = extract_from_part(part)
             if data:
                 return data
-                        
-        # Fallback search checking for header
-        for part in parts:
-            inline_data = get_field(part, "inline_data")
-            if inline_data:
-                data = get_field(inline_data, "data")
-                if data and data.startswith(b"MThd"):
-                    return data
-            file_data = get_field(part, "file_data")
-            if file_data:
-                file_uri = get_field(file_data, "file_uri")
-                try:
-                    from google.genai import Client
-                    client = Client()
-                    data = client.files.download(file=file_uri)
-                    if data and data.startswith(b"MThd"):
-                        return data
-                except Exception:
-                    pass
         return None
 
     midi_bytes = None
@@ -377,7 +373,6 @@ async def get_attached_midi_file(tool_context: ToolContext) -> str | None:
     if not midi_bytes:
         try:
             artifact_keys = await tool_context.list_artifacts()
-            # Look for MIDI file keys (case-insensitive check for .mid or .midi extension)
             midi_keys = [k for k in artifact_keys if k.lower().endswith((".mid", ".midi"))]
             if not midi_keys:
                 midi_keys = artifact_keys
@@ -389,25 +384,6 @@ async def get_attached_midi_file(tool_context: ToolContext) -> str | None:
                     if data:
                         midi_bytes = data
                         break
-                    # Fallback to check if raw bytes start with MThd
-                    inline_data = get_field(part, "inline_data")
-                    if inline_data:
-                        raw_data = get_field(inline_data, "data")
-                        if raw_data and raw_data.startswith(b"MThd"):
-                            midi_bytes = raw_data
-                            break
-                    file_data = get_field(part, "file_data")
-                    if file_data:
-                        file_uri = get_field(file_data, "file_uri")
-                        try:
-                            from google.genai import Client
-                            client = Client()
-                            raw_data = client.files.download(file=file_uri)
-                            if raw_data and raw_data.startswith(b"MThd"):
-                                midi_bytes = raw_data
-                                break
-                        except Exception:
-                            pass
         except Exception as e:
             print(f"Failed to load or list artifacts: {e}")
 
