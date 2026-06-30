@@ -13,6 +13,12 @@ import json
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, Field
+
+class FileAttachment(BaseModel):
+    fileName: str = Field(description="The name of the file (e.g. 'melody.mid')")
+    mimeType: str = Field(description="The MIME type of the file (e.g. 'audio/midi')")
+    base64Data: str = Field(description="The raw binary content of the file, base64-encoded")
 
 # Import stateless helpers from the main agent to avoid duplicating static definitions
 try:
@@ -156,11 +162,11 @@ def analyze_chord(pitches: str, key_signature: str = "") -> str:
 
 
 @mcp.tool()
-def detect_key(file_attachment: dict = None, session_id: str = "default") -> str:
+def detect_key(file_attachment: FileAttachment = None, session_id: str = "default") -> str:
     """Estimate/detect the musical key signature of the active score or a MIDI file attachment.
 
     Args:
-        file_attachment: Optional structured object containing {"fileName": "string", "mimeType": "string", "base64Data": "string"}.
+        file_attachment: Optional structured object containing fileName, mimeType, and base64Data of the attached file.
         session_id:      The unique score session ID. Defaults to 'default'.
 
     Returns:
@@ -170,9 +176,7 @@ def detect_key(file_attachment: dict = None, session_id: str = "default") -> str
     resolved_path = ""
     
     if file_attachment:
-        if not isinstance(file_attachment, dict):
-            return json.dumps({"status": "error", "error": "Invalid file_attachment argument."})
-        b64_str = file_attachment.get("base64Data") or file_attachment.get("base64_data")
+        b64_str = file_attachment.base64Data
         if not b64_str:
             return json.dumps({"status": "error", "error": "Missing base64Data inside file_attachment."})
             
@@ -321,21 +325,21 @@ def export_score_to_midi(session_id: str = "default") -> str:
 
 
 @mcp.tool()
-def import_midi_to_score(file_attachment: dict, session_id: str = "default") -> str:
+def import_midi_to_score(file_attachment: FileAttachment, session_id: str = "default") -> str:
     """Import an external MIDI file attachment into the active score session.
 
     Args:
-        file_attachment: A structured object containing {"fileName": "string", "mimeType": "string", "base64Data": "string"}.
+        file_attachment: A structured object containing fileName, mimeType, and base64Data of the attached file.
         session_id:      The unique score session ID. Defaults to 'default'.
 
     Returns:
         JSON with keys: status, tracks_imported, key_signature, tempo.
     """
     session_id = _sanitize_arg(session_id)
-    if not file_attachment or not isinstance(file_attachment, dict):
+    if not file_attachment:
         return json.dumps({"status": "error", "error": "Invalid or missing file_attachment argument."})
         
-    b64_str = file_attachment.get("base64Data") or file_attachment.get("base64_data")
+    b64_str = file_attachment.base64Data
     if not b64_str:
         return json.dumps({"status": "error", "error": "Missing base64Data inside file_attachment."})
         
@@ -357,19 +361,19 @@ def import_midi_to_score(file_attachment: dict, session_id: str = "default") -> 
 
 
 @mcp.tool()
-def analyze_midi_file(file_attachment: dict) -> str:
+def analyze_midi_file(file_attachment: FileAttachment) -> str:
     """Ingest a raw binary MIDI file attachment and extract track count, tempo, note count, and instruments.
 
     Args:
-        file_attachment: A structured object containing {"fileName": "string", "mimeType": "string", "base64Data": "string"}.
+        file_attachment: A structured object containing fileName, mimeType, and base64Data of the attached file.
 
     Returns:
         JSON with keys: status, track_count, tempo, note_count, instruments.
     """
-    if not file_attachment or not isinstance(file_attachment, dict):
+    if not file_attachment:
         return json.dumps({"status": "error", "error": "Invalid or missing file_attachment argument."})
         
-    b64_str = file_attachment.get("base64Data") or file_attachment.get("base64_data")
+    b64_str = file_attachment.base64Data
     if not b64_str:
         return json.dumps({"status": "error", "error": "Missing base64Data inside file_attachment."})
         
