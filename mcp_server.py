@@ -84,10 +84,15 @@ def _run_script(script_path: Path, args: list[str]) -> str:
     Returns:
         The stdout JSON string from the script, or a JSON error object.
     """
-    python_exe = sys.executable or "python"
+    python_exe = str((_PROJECT_ROOT / ".venv" / "Scripts" / "python.exe").resolve())
+    if not Path(python_exe).exists():
+        python_exe = str((_PROJECT_ROOT / ".venv" / "bin" / "python").resolve())
+    if not Path(python_exe).exists():
+        python_exe = sys.executable or "python"
+
     try:
         result = subprocess.run(
-            [python_exe, str(script_path), *args],
+            [python_exe, "-W", "ignore", str(script_path), *args],
             capture_output=True,
             text=True,
             check=False,
@@ -175,31 +180,40 @@ def detect_key(file_attachment: FileAttachment = None, session_id: str = "defaul
     session_id = _sanitize_arg(session_id)
     resolved_path = ""
     
-    if file_attachment:
-        b64_str = file_attachment.base64Data
-        if not b64_str:
-            return json.dumps({"status": "error", "error": "Missing base64Data inside file_attachment."})
-            
-        try:
+    import uuid
+    unique_id = uuid.uuid4().hex
+    temp_dir = _PROJECT_ROOT / "skills" / "music_theory_query" / "assets"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = temp_dir / f"temp_{unique_id}.mid"
+    
+    try:
+        if file_attachment:
+            b64_str = file_attachment.base64Data
+            if not b64_str:
+                return json.dumps({"status": "error", "error": "Missing base64Data inside file_attachment."})
+                
             content = _safe_decode_base64(b64_str)
             if not content.startswith(b"MThd"):
                 return json.dumps({"status": "error", "error": "Invalid MIDI file: decoded content does not start with MThd header."})
             
-            temp_dir = _PROJECT_ROOT / "skills" / "music_theory_query" / "assets"
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            temp_file = temp_dir / f"temp_{session_id}.mid"
             temp_file.write_bytes(content)
             resolved_path = str(temp_file.resolve())
-        except Exception as e:
-            return json.dumps({"status": "error", "error": f"Failed to decode base64 MIDI content: {e}"})
 
-    script = _PROJECT_ROOT / "skills" / "music_theory_query" / "scripts" / "detect_key.py"
-    args = []
-    if resolved_path:
-        args += ["--midi-path", resolved_path]
-    else:
-        args += ["--session-id", session_id]
-    return _run_script(script, args)
+        script = _PROJECT_ROOT / "skills" / "music_theory_query" / "scripts" / "detect_key.py"
+        args = []
+        if resolved_path:
+            args += ["--midi-path", resolved_path]
+        else:
+            args += ["--session-id", session_id]
+        return _run_script(script, args)
+    except Exception as e:
+        return json.dumps({"status": "error", "error": f"Failed to decode base64 MIDI content: {e}"})
+    finally:
+        if temp_file.is_file():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
 
 
 # ===========================================================================
@@ -343,21 +357,29 @@ def import_midi_to_score(file_attachment: FileAttachment, session_id: str = "def
     if not b64_str:
         return json.dumps({"status": "error", "error": "Missing base64Data inside file_attachment."})
         
+    import uuid
+    unique_id = uuid.uuid4().hex
+    temp_dir = _PROJECT_ROOT / "skills" / "score_construction" / "assets"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = temp_dir / f"temp_{unique_id}.mid"
+    
     try:
         content = _safe_decode_base64(b64_str)
         if not content.startswith(b"MThd"):
             return json.dumps({"status": "error", "error": "Invalid MIDI file: decoded content does not start with MThd header."})
         
-        temp_dir = _PROJECT_ROOT / "skills" / "score_construction" / "assets"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        temp_file = temp_dir / f"temp_{session_id}.mid"
         temp_file.write_bytes(content)
         resolved_path = str(temp_file.resolve())
+        script = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
+        return _run_script(script, ["import-midi", "--midi-path", resolved_path, "--session-id", session_id])
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to decode base64 MIDI content: {e}"})
-
-    script = _PROJECT_ROOT / "skills" / "score_construction" / "scripts" / "score_manager.py"
-    return _run_script(script, ["import-midi", "--midi-path", resolved_path, "--session-id", session_id])
+    finally:
+        if temp_file.is_file():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
 
 
 @mcp.tool()
@@ -377,21 +399,29 @@ def analyze_midi_file(file_attachment: FileAttachment) -> str:
     if not b64_str:
         return json.dumps({"status": "error", "error": "Missing base64Data inside file_attachment."})
         
+    import uuid
+    unique_id = uuid.uuid4().hex
+    temp_dir = _PROJECT_ROOT / "skills" / "midi_analytics" / "assets"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = temp_dir / f"temp_{unique_id}.mid"
+    
     try:
         content = _safe_decode_base64(b64_str)
         if not content.startswith(b"MThd"):
             return json.dumps({"status": "error", "error": "Invalid MIDI file: decoded content does not start with MThd header."})
         
-        temp_dir = _PROJECT_ROOT / "skills" / "midi_analytics" / "assets"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        temp_file = temp_dir / "temp_upload.mid"
         temp_file.write_bytes(content)
         resolved_path = str(temp_file.resolve())
+        script = _PROJECT_ROOT / "skills" / "midi_analytics" / "scripts" / "parse_midi_metrics.py"
+        return _run_script(script, ["--file-path", resolved_path])
     except Exception as e:
         return json.dumps({"status": "error", "error": f"Failed to decode base64 MIDI content: {e}"})
-
-    script = _PROJECT_ROOT / "skills" / "midi_analytics" / "scripts" / "parse_midi_metrics.py"
-    return _run_script(script, ["--file-path", resolved_path])
+    finally:
+        if temp_file.is_file():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
 
 
 # ===========================================================================
