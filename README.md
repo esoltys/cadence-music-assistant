@@ -87,7 +87,7 @@ flowchart TD
     SK4 --> L1 & L3
     SK5 --> L4
 
-    MCP -->|"exposes evaluate_interval\nlist_scale_pitches · analyze_chord"| T2
+    MCP -->|"exposes all 17 tools across 5 skills"| Tools
 ```
 
 ### Technology Stack
@@ -116,7 +116,7 @@ The following concepts from the "AI Agents: Intensive Vibe Coding Course" are de
 |---|---|---|
 | **Agent / Multi-agent system (ADK)** | ✅ | [`agents/music_assistant/agent.py`](agents/music_assistant/agent.py) — `root_agent = Agent(...)` with 17 registered tools |
 | **Agent Skills (agents-cli)** | ✅ | 5 skill directories under `skills/`, `agents-cli-manifest.yaml`, full `eval/playground/deploy` workflow |
-| **MCP Server** | ✅ | [`mcp_server.py`](mcp_server.py) — exposes 3 music theory tools via stdio MCP for external clients |
+| **MCP Server** | ✅ | [`mcp_server.py`](mcp_server.py) — exposes all 17 music theory, composition, visualization, and synthesis tools via stdio MCP for external clients |
 | **Security features** | ✅ | Path traversal guard (`_safe_resolve_path`), input length caps (`_sanitize_arg`), CORS control, session isolation, privacy-preserving telemetry |
 | **Deployability** | ✅ | `Dockerfile`, Cloud Run deployment via `agents-cli deploy`, Terraform scaffold available |
 | **Antigravity** | ✅ | Used throughout development — see [`GEMINI.md`](GEMINI.md) and video demo |
