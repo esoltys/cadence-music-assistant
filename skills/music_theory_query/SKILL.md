@@ -4,6 +4,9 @@ description: Focused exclusively on interval calculations, mode parsing, basic s
 permission_tier: Read-Only
 allowed-tools:
   - detect_key
+  - evaluate_interval
+  - list_scale_pitches
+  - analyze_chord
 ---
 
 # querying-music-theory
