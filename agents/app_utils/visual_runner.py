@@ -30,7 +30,7 @@ class VisualRunner(Runner):
                         # If a session_id is available, resolve any placeholder references like SESSION_ID or <session_id>
                         if session_id:
                             text_content = re.sub(
-                                r'(skills/visual_notation_rendering/assets/chord_)(?:SESSION_ID|<session_id>|\{session_id\})(\.png)',
+                                r'(skills/visual_notation_rendering/assets/(?:chord|piano_roll|score_plot)_)(?:SESSION_ID|<session_id>|\{session_id\})(\.png)',
                                 fr'\g<1>{session_id}\2',
                                 text_content
                             )
