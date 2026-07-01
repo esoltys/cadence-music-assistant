@@ -59,3 +59,26 @@ Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline 
 - **Run Python with `uv`**: `uv run python script.py`. Run `agents-cli install` first.
 - **Stop on repeated errors**: If the same error appears 3+ times, fix the root cause instead of retrying.
 - **Terraform conflicts** (Error 409): Use `terraform import` instead of retrying creation.
+
+---
+
+## Cadence-Specific Architectural Patterns & Lessons Learned
+
+### State & Session Management
+- **Local JSON State Stores**: Score states are tracked sequentially in JSON files under `skills/score_construction/assets/score_{session_id}.json`. When implementing tools or modifications, locate the score file and ensure changes are safely appended or mutated within the correct session context.
+- **Session IDs**: The unique ID should be fetched via `tool_context.session.id` or passed as `session_id`. Stale state assets should be proactively deleted (e.g., when rendering visual notation files) to prevent cross-run interference.
+
+### Input Sanitization & Path Traversal Guards
+- **Path Resolution**: Always resolve files using `_safe_resolve_path(user_path)` to ensure paths remain locked inside allowed roots (`_PROJECT_ROOT`, home directories, Downloads, Desktop, Documents).
+- **Subprocess Argument Caps**: Truncate all string arguments passed to subprocess scripts using `_sanitize_arg(value)` (standard cap is 256 characters, or up to 4096 for ABC/TinyNotation notation strings) to prevent excessive buffering and ensure robust error messages.
+- **Unpitched Percussion & Soundfonts**: Restrict user-supplied soundfont path strings to prevent directory traversal by stripping everything except the filename (e.g., `Path(name).name`) and appending it to `soundfonts/`.
+
+### Subprocess Execution of Skills
+- **Virtual Environment Resolving**: In tools that run scripts under `skills/`, find the python binary dynamically (e.g., checking `.venv/Scripts/python.exe` on Windows and `.venv/bin/python` on POSIX, before falling back to `sys.executable` or `"python"`).
+- **Ignore Subprocess Warnings**: Run scripts with `-W ignore` flags (e.g., `python -W ignore script.py`) to prevent deprecation warnings or warning outputs from corrupting the returned JSON stdout payload.
+- **MimeType & Base64 Attachments**: When decoding user attachments (like `.mid` files), utilize `_safe_decode_base64()`. Ensure it handles potential URL data prefixes (e.g., `data:audio/midi;base64,...`), strips whitespace and extraneous backslashes/quotes, and fixes missing base64 padding.
+
+### Rendering & Output Formatting
+- **Visual Aid Embedding**: When the model or tools render piano rolls, chord fretboards, or keyboard layouts, save them to the appropriate assets directory. The agent response should reference these assets inline as Markdown images using the relative path returned by the tool (e.g., `![Piano Roll](skills/visual_notation_rendering/assets/piano_roll_{session_id}.png)`).
+- **No Direct file:// Links**: Never print raw local paths or `file://` URLs in response texts. The chat UI automatically processes file attachments (such as `.mid` or `.wav` files) and sheet music (such as `.musicxml` files) and displays them to the user inline or in the Artifacts panel.
+
